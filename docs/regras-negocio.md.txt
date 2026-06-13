@@ -1,0 +1,19 @@
+# Regras de negócio
+
+## Classificação de clientes
+
+0-30 dias = saudável
+31-60 dias = atenção
+61-90 dias = risco
+90+ dias = inativo antigo
+
+## Objetivo do sistema
+Ajudar equipe comercial da Fenié a:
+- reativar clientes
+- acompanhar carteira
+- gerar follow-up
+- acompanhar vendedores
+- visualizar oportunidades
+
+## Fluxo
+Cliente importado → classificado → vendedor trabalha → registra contato → converte → gera relatório

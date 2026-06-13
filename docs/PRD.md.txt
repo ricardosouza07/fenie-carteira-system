@@ -1,0 +1,95 @@
+# PRD — Central de Carteira Fenié
+
+## Visão Geral
+
+Sistema interno para gerenciamento de carteira comercial da Fenié PRO.
+
+Objetivo:
+ajudar equipe comercial a acompanhar clientes ativos, inativos e oportunidades de reativação.
+
+---
+
+# Problema
+
+Hoje a equipe:
+- perde follow-up
+- esquece clientes
+- não acompanha inativos
+- não visualiza prioridades
+- não centraliza histórico
+
+---
+
+# Solução
+
+Criar plataforma centralizada para:
+- visualizar carteira
+- acompanhar contatos
+- controlar follow-up
+- medir conversão
+- organizar vendedores
+
+---
+
+# Usuários
+
+## Supervisor comercial
+- vê toda carteira
+- acompanha vendedores
+- vê relatórios
+
+## Vendedor interno
+- trabalha carteira
+- registra contatos
+- agenda follow-up
+
+## Vendedor externo
+- acompanha visitas
+- atualiza status
+
+---
+
+# Funcionalidades MVP
+
+## Dashboard
+- ativos
+- inativos
+- risco
+- valor recuperado
+
+## Carteira
+- filtros
+- pesquisa
+- classificação automática
+
+## Contatos
+- registrar interação
+- status
+- observações
+
+## Calendário
+- follow-up
+- próximas compras
+
+---
+
+# Regras de negócio
+
+0-30 dias = saudável
+31-60 dias = atenção
+61-90 dias = risco
+90+ dias = inativo antigo
+
+---
+
+# Stack
+
+- Next.js
+- Supabase
+- PostgreSQL
+
+---
+
+# Objetivo do MVP
+
+Ter primeira versão funcional em até 30 dias.

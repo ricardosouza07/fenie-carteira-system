@@ -1,0 +1,175 @@
+# ROADMAP — CENTRAL DE CARTEIRA FENIÉ
+
+## VISÃO GERAL
+
+Sistema interno para gerenciamento da carteira comercial da Fenié PRO.
+
+Objetivo:
+centralizar acompanhamento de clientes, reativação, follow-up, vendedores e indicadores comerciais.
+
+---
+
+# FASE 1 — ESTRUTURAÇÃO DO PROJETO
+
+## Objetivos
+- definir arquitetura
+- definir banco de dados
+- estruturar regras de negócio
+- organizar fluxo do sistema
+
+## Entregas
+- PRD completo
+- modelagem banco de dados
+- fluxo de usuários
+- wireframes
+- estrutura frontend/backend
+
+## Status
+⬜ Em andamento
+
+---
+
+# FASE 2 — MVP OPERACIONAL
+
+## Objetivo
+Criar primeira versão funcional para uso interno da equipe.
+
+## Funcionalidades
+
+### Autenticação
+- login
+- usuários
+- permissões
+
+### Dashboard
+- ativos
+- atenção
+- risco
+- inativos
+- convertidos
+- valor recuperado
+
+### Carteira
+- importação Excel
+- filtros
+- busca
+- classificação automática
+- paginação
+
+### Gestão de contatos
+- registrar contato
+- observações
+- histórico
+- status do cliente
+
+### Status
+- não trabalhado
+- contatado
+- aguardando retorno
+- convertido
+- visita encaminhada
+
+### Calendário
+- follow-up
+- próximas compras
+- agenda comercial
+
+### Relatórios
+- exportação Excel
+- relatório mensal
+- desempenho vendedores
+
+## Status
+⬜ Não iniciado
+
+---
+
+# FASE 3 — EQUIPE E PERFORMANCE
+
+## Objetivo
+Melhorar produtividade e acompanhamento da equipe.
+
+## Funcionalidades
+- metas por vendedor
+- ranking
+- indicadores
+- tempo médio sem contato
+- clientes esquecidos
+- produtividade diária
+
+## Status
+⬜ Futuro
+
+---
+
+# FASE 4 — AUTOMAÇÕES
+
+## Objetivo
+Automatizar processos comerciais.
+
+## Funcionalidades
+- WhatsApp integrado
+- mensagens automáticas
+- follow-up automático
+- alertas
+- notificações
+
+## Status
+⬜ Futuro
+
+---
+
+# FASE 5 — INTELIGÊNCIA COMERCIAL
+
+## Objetivo
+Transformar dados da carteira em decisões estratégicas.
+
+## Funcionalidades
+- previsão de recompra
+- previsão de perda de cliente
+- oportunidades de reativação
+- dashboards avançados
+- análise por região
+- análise por vendedor
+
+## Status
+⬜ Futuro
+
+---
+
+# STACK DEFINIDA
+
+## Frontend
+- Next.js
+- Tailwind
+- Shadcn UI
+
+## Backend
+- Supabase
+- PostgreSQL
+
+## Hospedagem
+- Vercel
+
+---
+
+# PRIORIDADES DO MVP
+
+## Prioridade máxima
+- simplicidade
+- rapidez
+- usabilidade
+- visual estilo Mercos
+
+## Não é prioridade agora
+- app mobile
+- multiempresa
+- venda externa
+- marketplace
+- IA avançada
+
+---
+
+# OBJETIVO FINAL
+
+Criar a central operacional da carteira comercial da Fenié PRO.

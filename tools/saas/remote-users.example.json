@@ -1,0 +1,29 @@
+[
+  {
+    "localProfileId": "00000000-0000-0000-0000-000000000001",
+    "email": "admin@fenie.com.br",
+    "password": "ALTERE-PARA-UMA-SENHA-FORTE",
+    "fullName": "Administrador Fenie",
+    "role": "admin",
+    "salespersonId": null,
+    "active": true
+  },
+  {
+    "localProfileId": "00000000-0000-0000-0000-000000000002",
+    "email": "supervisor@fenie.com.br",
+    "password": "ALTERE-PARA-UMA-SENHA-FORTE",
+    "fullName": "Supervisor Comercial",
+    "role": "supervisor",
+    "salespersonId": "10000000-0000-0000-0000-000000000001",
+    "active": true
+  },
+  {
+    "localProfileId": "00000000-0000-0000-0000-000000000003",
+    "email": "operador@fenie.com.br",
+    "password": "ALTERE-PARA-UMA-SENHA-FORTE",
+    "fullName": "Operador Interno",
+    "role": "operador_interno",
+    "salespersonId": "10000000-0000-0000-0000-000000000002",
+    "active": true
+  }
+]

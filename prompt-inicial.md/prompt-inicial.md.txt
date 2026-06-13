@@ -1,0 +1,130 @@
+# PROJETO — CENTRAL DE CARTEIRA FENIÉ
+
+## Objetivo
+
+Criar um sistema interno para gerenciamento de carteira comercial da Fenié PRO.
+
+O sistema NÃO será um SaaS para venda.
+Será uma plataforma interna para:
+- acompanhamento de clientes
+- reativação de carteira
+- controle de follow-up
+- gestão da equipe comercial
+- acompanhamento de metas
+- visualização de oportunidades
+
+---
+
+## Referência visual
+
+Usar como inspiração visual o sistema MERCOS.
+
+Características:
+- layout claro
+- sistema corporativo
+- visual leve
+- menu lateral esquerdo
+- dashboards simples
+- tabelas limpas
+- foco em produtividade
+
+Evitar visual escuro/luxuoso do protótipo atual.
+
+---
+
+## Arquivos base
+
+Analisar:
+- /base/Carteira_Padronizada_Fenie.xlsx
+- /prototype/fenie_reativacao_v2.html
+- /docs/referencia-mercos.png
+
+---
+
+## Funcionalidades MVP
+
+### 1. Login interno
+- autenticação
+- usuários
+- permissões
+
+### 2. Dashboard
+- clientes ativos
+- clientes em risco
+- clientes inativos
+- convertidos
+- valor recuperado
+- metas
+
+### 3. Gestão da carteira
+- filtros
+- pesquisa
+- classificação automática
+- histórico
+
+### 4. Status do cliente
+- não trabalhado
+- contatado
+- aguardando retorno
+- convertido
+- visita encaminhada
+
+### 5. Calendário
+- follow-up
+- próxima compra prevista
+- agenda da equipe
+
+### 6. Relatórios
+- exportação Excel
+- relatório mensal
+- performance por vendedor
+
+---
+
+## Regras de negócio
+
+### Classificação automática
+
+0-30 dias = saudável
+31-60 dias = atenção
+61-90 dias = risco
+90+ dias = inativo antigo
+
+---
+
+## Stack sugerida
+
+- Next.js
+- Supabase
+- PostgreSQL
+- Tailwind
+- Shadcn UI
+
+---
+
+## Importante
+
+O sistema deve ser:
+- rápido
+- simples
+- responsivo
+- extremamente fácil de usar
+
+Prioridade:
+funcionalidade e produtividade da equipe.
+
+---
+
+## Primeira tarefa
+
+Antes de programar:
+
+1. analisar todos os arquivos
+2. criar PRD
+3. criar arquitetura do sistema
+4. criar banco de dados
+5. criar roadmap do MVP
+6. mapear telas principais
+7. estruturar fluxo de usuários
+
+Não iniciar código ainda.

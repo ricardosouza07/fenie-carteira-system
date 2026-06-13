@@ -1,0 +1,29 @@
+{
+  "name": "fenie-carteira-system",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "install:frontend": "npm --prefix frontend install",
+    "server:install": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/local/install-server-fenie.ps1",
+    "server:start": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/local/start-fenie.ps1 -ServerMode",
+    "server:frontend": "npm --prefix frontend run start -- --hostname 0.0.0.0 --port 3000",
+    "dev:local": "npm --prefix frontend run dev -- --hostname 0.0.0.0",
+    "dev:local:pc": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "lint": "npm --prefix frontend run lint",
+    "typecheck": "npm --prefix frontend run typecheck",
+    "supabase:start": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/local/supabase.ps1 start",
+    "supabase:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/local/supabase.ps1 stop",
+    "supabase:reset": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/local/supabase.ps1 reset",
+    "supabase:status": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/local/supabase.ps1 status",
+    "backup:local": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/local/backup-local.ps1",
+    "restore:local": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/local/restore-local.ps1",
+    "saas:export": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/saas/export-local-saas.ps1",
+    "saas:backup-remote": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/saas/backup-remote-saas.ps1",
+    "saas:migrations": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/saas/apply-remote-migrations.ps1",
+    "saas:users": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/saas/create-remote-users.ps1",
+    "saas:import": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/saas/import-remote-saas.ps1",
+    "saas:validate": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/saas/validate-saas.ps1",
+    "doctor": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/local/doctor.ps1"
+  }
+}
