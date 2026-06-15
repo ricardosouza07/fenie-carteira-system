@@ -8,6 +8,7 @@ import type {
   ContactStatus,
   WorkStatus,
 } from "@/features/carteira/types";
+import { getCurrentPeriod } from "@/lib/current-period";
 
 import type {
   ChannelLabel,
@@ -24,7 +25,7 @@ type Row = Record<string, unknown>;
 
 const ID_QUERY_CHUNK_SIZE = 100;
 const ROW_QUERY_PAGE_SIZE = 500;
-const TODAY = "2026-05-27";
+const TODAY = getCurrentPeriod().date;
 
 const statusActionLabels: Record<ContactStatus, string> = {
   contatado: "Contato registrado",

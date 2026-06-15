@@ -9,6 +9,7 @@ import type {
   ContactStatus,
   WorkStatus,
 } from "@/features/carteira/types";
+import { getCurrentPeriod } from "@/lib/current-period";
 import { fetchByIdBatches } from "@/lib/supabase/query-helpers";
 
 import type { CalendarEvent, CalendarEventType, LoadCalendarioResult } from "./types";
@@ -16,7 +17,7 @@ import type { CalendarEvent, CalendarEventType, LoadCalendarioResult } from "./t
 type SupabaseServiceClient = SupabaseClient;
 type Row = Record<string, unknown>;
 
-const TODAY = "2026-05-27";
+const TODAY = getCurrentPeriod().date;
 
 const statusActionLabels: Record<ContactStatus, string> = {
   contatado: "Contato registrado",

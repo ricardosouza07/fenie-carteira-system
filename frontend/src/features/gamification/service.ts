@@ -1,4 +1,5 @@
 import type { CarteiraClient } from "@/features/carteira/types";
+import { getCurrentPeriod } from "@/lib/current-period";
 
 import type {
   AchievementLevel,
@@ -11,7 +12,13 @@ import type {
   SellerScore,
 } from "./types";
 
-const TODAY = "2026-05-26";
+const currentPeriod = getCurrentPeriod();
+const TODAY = currentPeriod.date;
+const campaignPeriodEnd = new Date(
+  Date.UTC(Number(currentPeriod.year), Number(currentPeriod.month), 0),
+)
+  .toISOString()
+  .slice(0, 10);
 const FINAL_LEVEL_POINTS = 1200;
 
 export const pointRules: Record<PointAction, number> = {
@@ -26,13 +33,13 @@ export const pointRules: Record<PointAction, number> = {
 };
 
 export const defaultPerformanceCampaign: PerformanceCampaign = {
-  id: "campanha-2026-05",
+  id: `campanha-${currentPeriod.monthKey}`,
   nome: "Campanha de Performance do Mês",
-  mesAno: "2026-05",
-  periodoInicial: "2026-05-01",
-  periodoFinal: "2026-05-31",
+  mesAno: currentPeriod.monthKey,
+  periodoInicial: `${currentPeriod.monthKey}-01`,
+  periodoFinal: campaignPeriodEnd,
   status: "ativa",
-  atualizadoEm: "2026-05-26T00:00:00.000Z",
+  atualizadoEm: `${TODAY}T00:00:00.000Z`,
   marcos: [
     {
       id: "aquecimento",

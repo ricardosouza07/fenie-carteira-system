@@ -6,6 +6,7 @@ import type {
   ClientLevel,
   WorkStatus,
 } from "@/features/carteira/types";
+import { addDaysToDateKey, getCurrentPeriod } from "@/lib/current-period";
 
 import type {
   AgendaGroupKey,
@@ -23,8 +24,8 @@ const ID_QUERY_CHUNK_SIZE = 100;
 const ROW_QUERY_PAGE_SIZE = 500;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const TODAY = "2026-05-27";
-const WEEK_LIMIT = "2026-06-03";
+const TODAY = getCurrentPeriod().date;
+const WEEK_LIMIT = addDaysToDateKey(TODAY, 7);
 
 async function expectNoError<T>(
   operation: PromiseLike<{ data: T; error: { message: string } | null }>,

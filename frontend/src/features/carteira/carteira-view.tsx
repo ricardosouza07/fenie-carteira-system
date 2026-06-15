@@ -36,6 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { getCurrentPeriod } from "@/lib/current-period";
 import { cn } from "@/lib/utils";
 
 import {
@@ -74,7 +75,7 @@ import type {
   WorkStatus,
 } from "./types";
 
-const TODAY = "2026-05-26";
+const TODAY = getCurrentPeriod().date;
 const DEFAULT_PAGE_SIZE = 10;
 
 type SortKey = "diasSemComprar" | "ultimoPedido";

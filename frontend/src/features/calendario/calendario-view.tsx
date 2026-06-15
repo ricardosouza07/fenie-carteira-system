@@ -46,6 +46,7 @@ import type {
   WorkStatus,
 } from "@/features/carteira/types";
 import { useGamification } from "@/features/gamification/gamification-provider";
+import { getCurrentPeriod } from "@/lib/current-period";
 import { cn } from "@/lib/utils";
 
 import type {
@@ -56,9 +57,10 @@ import type {
   LoadCalendarioResult,
 } from "./types";
 
-const TODAY = "2026-05-27";
-const INITIAL_MONTH = "2026-05";
-const INITIAL_SELECTED_DATE = "2026-05-27";
+const CURRENT_PERIOD = getCurrentPeriod();
+const TODAY = CURRENT_PERIOD.date;
+const INITIAL_MONTH = CURRENT_PERIOD.monthKey;
+const INITIAL_SELECTED_DATE = TODAY;
 
 type StatusFilter =
   | "todos"

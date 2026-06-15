@@ -38,13 +38,14 @@ import type {
   ContactStatus,
 } from "@/features/carteira/types";
 import type { PointEvent } from "@/features/gamification/types";
+import { getCurrentPeriod } from "@/lib/current-period";
 import type {
   ClienteDetailFollowUp,
   ClienteDetailPointEvent,
   LoadClienteDetailResult,
 } from "./types";
 
-const TODAY = "2026-05-27";
+const TODAY = getCurrentPeriod().date;
 
 type FollowUpStatus = "aberto" | "vencido" | "concluido";
 

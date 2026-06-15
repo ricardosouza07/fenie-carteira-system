@@ -9,6 +9,7 @@ import type {
   ContactStatus,
   WorkStatus,
 } from "@/features/carteira/types";
+import { getCurrentPeriod } from "@/lib/current-period";
 
 import type {
   ClienteDetailFollowUp,
@@ -21,7 +22,7 @@ type Row = Record<string, unknown>;
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const TODAY = "2026-05-27";
+const TODAY = getCurrentPeriod().date;
 
 const statusActionLabels: Record<ContactStatus, string> = {
   contatado: "Contato registrado",

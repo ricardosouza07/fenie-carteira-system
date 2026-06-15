@@ -43,6 +43,7 @@ import {
   InteractionPersistenceToastStack,
   type PersistenceToast,
 } from "@/features/carteira/interaction-persistence-toast";
+import { addDaysToDateKey, getCurrentPeriod } from "@/lib/current-period";
 import type {
   CarteiraClient,
   CarteiraInteraction,
@@ -58,8 +59,8 @@ import type {
   LoadAgendaResult,
 } from "./types";
 
-const TODAY = "2026-05-27";
-const WEEK_LIMIT = "2026-06-03";
+const TODAY = getCurrentPeriod().date;
+const WEEK_LIMIT = addDaysToDateKey(TODAY, 7);
 
 type NewFollowUpForm = {
   clientId: string;

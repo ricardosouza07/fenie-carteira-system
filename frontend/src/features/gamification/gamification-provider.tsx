@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { carteiraClients } from "@/features/carteira/mock-clients";
+import { getCurrentPeriod } from "@/lib/current-period";
 
 import {
   buildMockPointEvents,
@@ -25,7 +26,7 @@ import type {
   PointEvent,
 } from "./types";
 
-const DEFAULT_MONTH = "2026-05";
+const DEFAULT_MONTH = getCurrentPeriod().monthKey;
 const CAMPAIGN_STORAGE_KEY = "fenie.performanceCampaign";
 
 type PointsToast = {

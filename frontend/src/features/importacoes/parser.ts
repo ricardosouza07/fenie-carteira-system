@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 
 import type { CarteiraClient, ClientLevel } from "@/features/carteira/types";
+import { getCurrentPeriod } from "@/lib/current-period";
 
 import type {
   ImportColumnKey,
@@ -9,7 +10,7 @@ import type {
   RecognizedColumn,
 } from "./types";
 
-const TODAY = "2026-05-26";
+const TODAY = getCurrentPeriod().date;
 const HEADER_SCAN_LIMIT = 40;
 
 const columnLabels: Record<ImportColumnKey, string> = {

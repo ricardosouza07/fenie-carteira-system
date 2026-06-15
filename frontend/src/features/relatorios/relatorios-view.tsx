@@ -36,6 +36,7 @@ import type {
 } from "@/features/carteira/types";
 import { useGamification } from "@/features/gamification/gamification-provider";
 import type { PointEvent } from "@/features/gamification/types";
+import { getCurrentPeriod } from "@/lib/current-period";
 import { cn } from "@/lib/utils";
 
 import type {
@@ -49,8 +50,9 @@ import type {
   WorkedRow,
 } from "./types";
 
-const TODAY = "2026-05-27";
-const DEFAULT_PERIOD = "2026-05";
+const CURRENT_PERIOD = getCurrentPeriod();
+const TODAY = CURRENT_PERIOD.date;
+const DEFAULT_PERIOD = CURRENT_PERIOD.monthKey;
 
 type SelectOption = {
   value: string;
