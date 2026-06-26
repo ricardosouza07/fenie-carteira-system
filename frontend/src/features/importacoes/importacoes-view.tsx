@@ -425,7 +425,7 @@ function SupabaseStatusNotice({ state }: { state: SupabaseLoadState }) {
 function ValidationPanel({ result }: { result: ParsedImportResult }) {
   return (
     <div className="space-y-4">
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <MetricCard
           label="Linhas lidas"
           value={String(result.totalRows)}
@@ -438,6 +438,13 @@ function ValidationPanel({ result }: { result: ParsedImportResult }) {
           hint="Prontas para publicação"
           icon={CheckCircle2}
           tone="success"
+        />
+        <MetricCard
+          label="Clientes únicos"
+          value={String(result.uniqueClients)}
+          hint="Após cruzamento inicial"
+          icon={Eye}
+          tone="info"
         />
         <MetricCard
           label="Linhas inválidas"
@@ -895,7 +902,7 @@ export function ImportacoesView() {
       <PageHeader
         eyebrow="Dados da carteira"
         title="Importações"
-        description="Importe a planilha XLSX da carteira, valide colunas e revise uma amostra antes de publicar no Supabase."
+        description="Importe a planilha original XLS/XLSX do Mercos, valide colunas e revise uma amostra antes de publicar no Supabase."
         actions={
           <>
             <Button
@@ -922,10 +929,10 @@ export function ImportacoesView() {
           <CardHeader>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <CardTitle>Nova importação XLSX</CardTitle>
+                <CardTitle>Nova importação XLS/XLSX</CardTitle>
                 <CardDescription>
-                  Leia a primeira aba, detecte o cabeçalho automaticamente e
-                  publique apenas após revisar a prévia.
+                  Envie a planilha original do Mercos ou o modelo padronizado,
+                  detecte o cabeçalho automaticamente e publique após revisar.
                 </CardDescription>
               </div>
               <Button
@@ -957,9 +964,10 @@ export function ImportacoesView() {
                       Enviar planilha da carteira
                     </div>
                     <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                      Use um arquivo .xlsx ou .xls. Linhas acima do cabeçalho
-                      podem existir; o sistema procura automaticamente as
-                      colunas comerciais conhecidas. Limite por arquivo:{" "}
+                      Use um arquivo .xls ou .xlsx. A planilha original do
+                      Mercos pode ter filtros acima do cabeçalho; o sistema
+                      procura automaticamente as colunas comerciais conhecidas.
+                      Limite por arquivo:{" "}
                       {IMPORT_UPLOAD_LIMIT_LABEL}.
                     </p>
                     <Button

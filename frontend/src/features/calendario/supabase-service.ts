@@ -4,11 +4,15 @@ import { getAuthenticatedSupabaseClient } from "@/features/auth/access";
 import type {
   CarteiraClient,
   CarteiraInteraction,
-  ClientLevel,
   ContactChannel,
   ContactStatus,
   WorkStatus,
 } from "@/features/carteira/types";
+import {
+  calculateClientHealthStatus,
+  isClientConverted,
+} from "@/features/carteira/operational-rules";
+import { normalizeFinancialStatus } from "@/features/carteira/financial-status";
 import { getCurrentPeriod } from "@/lib/current-period";
 import { fetchByIdBatches } from "@/lib/supabase/query-helpers";
 
@@ -141,15 +145,6 @@ function workStatus(value: unknown): WorkStatus {
     : "nao_trabalhado";
 }
 
-function healthStatus(value: unknown): ClientLevel {
-  return value === "saudavel" ||
-    value === "atencao" ||
-    value === "risco" ||
-    value === "inativo"
-    ? value
-    : "saudavel";
-}
-
 function channel(value: unknown): ContactChannel {
   return value === "whatsapp" ||
     value === "telefone" ||
@@ -245,34 +240,50 @@ function normalizeClient(input: {
     latestInteraction?.interaction_at ?? latestInteraction?.created_at,
   );
   const interaction = latestInteraction ? mapInteraction(latestInteraction) : null;
+  const diasSemComprar = integerOrZero(
+    item.days_without_buying ?? customer.days_without_buying,
+  );
 
   return {
     id: String(customer.id),
     portfolioItemId: stringOrNull(item.id) ?? undefined,
     vendedorId: stringOrNull(item.salesperson_id) ?? undefined,
-    nivel: healthStatus(item.health_status ?? customer.health_status),
+    nivel: calculateClientHealthStatus(diasSemComprar),
     cliente: nomeFantasia ?? razaoSocial ?? "Cliente sem nome",
     razaoSocial: razaoSocial ?? undefined,
     nomeFantasia: nomeFantasia ?? undefined,
+    documento: stringOrNull(customer.document) ?? undefined,
+    inscricaoEstadual: stringOrNull(customer.state_registration) ?? undefined,
     email: pickEmail(customer, contacts),
     telefone: pickPhone(customer, contacts),
     cidade: stringOrNull(customer.city) ?? "-",
     bairro: stringOrNull(customer.district) ?? "-",
     endereco: stringOrNull(customer.address) ?? undefined,
-    diasSemComprar: integerOrZero(
-      item.days_without_buying ?? customer.days_without_buying,
-    ),
+    diasSemComprar,
     cicloMedioCompraDias:
       typeof customer.average_purchase_cycle_days === "number"
         ? customer.average_purchase_cycle_days
         : undefined,
     proximaCompra: dateOnly(item.next_purchase_date ?? customer.next_purchase_date),
+    ultimoPedidoNumero: stringOrNull(customer.last_order_number) ?? undefined,
     ultimoPedido: dateOnly(item.last_order_date ?? customer.last_order_date),
     valorUltimoPedido: numberOrZero(customer.last_order_value),
     vendedor,
     vendedorUltimoPedido:
       stringOrNull(customer.last_order_salesperson_name) ?? vendedor,
-    situacaoOriginal: stringOrNull(customer.original_situation) ?? undefined,
+    situacaoOriginal:
+      stringOrNull(customer.mercos_situation) ??
+      stringOrNull(customer.original_situation) ??
+      undefined,
+    dataCadastro: dateOnly(customer.registration_date),
+    origemCadastro: stringOrNull(customer.registration_origin) ?? undefined,
+    acessoB2B: stringOrNull(customer.b2b_access) ?? undefined,
+    segmento: stringOrNull(customer.segment) ?? undefined,
+    tagsCliente: stringOrNull(customer.customer_tags) ?? undefined,
+    proximaTarefa: stringOrNull(customer.next_task) ?? undefined,
+    dataTarefa: dateOnly(customer.task_date),
+    situacaoFinanceira: normalizeFinancialStatus(customer.financial_status),
+    observacaoFinanceira: stringOrNull(customer.financial_note),
     status: latestStatus ?? workStatus(item.work_status ?? customer.work_status),
     ultimaAcao: latestInteraction
       ? {
@@ -298,7 +309,7 @@ function eventTitle(type: CalendarEventType) {
     proxima_compra: "Proxima compra",
     follow_up: "Follow-up",
     visita: "Visita",
-    vencido: "Vencido",
+    vencido: "Recompra",
     convertido: "Convertido",
   };
 
@@ -315,18 +326,10 @@ function followUpStatusLabel(value: unknown) {
   }
 
   if (value === "vencido") {
-    return "Vencido";
+    return "Em atraso";
   }
 
   return "Aberto";
-}
-
-function followUpType(row: Row, dueDate: string): CalendarEventType {
-  if (row.status === "vencido" || dueDate < TODAY) {
-    return "vencido";
-  }
-
-  return "follow_up";
 }
 
 function followUpReason(row: Row) {
@@ -355,7 +358,7 @@ function buildFollowUpEvents(
     }
 
     const completed = row.status === "concluido";
-    const type = completed ? "follow_up" : followUpType(row, date);
+    const type: CalendarEventType = "follow_up";
 
     return [
       {
@@ -378,7 +381,7 @@ function buildFollowUpEvents(
 
 function buildNextPurchaseEvents(clients: CarteiraClient[]) {
   return clients.flatMap<CalendarEvent>((client) => {
-    if (!client.proximaCompra) {
+    if (!client.proximaCompra || isClientConverted(client, TODAY)) {
       return [];
     }
 
@@ -394,7 +397,7 @@ function buildNextPurchaseEvents(clients: CarteiraClient[]) {
         customerHref: customerHref(client),
         title: eventTitle(type),
         description: "Proxima compra prevista na carteira atual",
-        statusLabel: type === "vencido" ? "Vencida" : "Prevista",
+        statusLabel: type === "vencido" ? "Recompra" : "Prevista",
         canReschedule: false,
         canComplete: false,
       },
@@ -471,7 +474,7 @@ function buildWaitingReturnEvents(input: {
     }
 
     const date = client.proximaCompra ?? client.ultimaAcao.data ?? TODAY;
-    const type = date < TODAY ? "vencido" : "follow_up";
+    const type = "follow_up";
 
     return [
       {
@@ -483,7 +486,7 @@ function buildWaitingReturnEvents(input: {
         customerHref: customerHref(client),
         title: eventTitle(type),
         description: "Cliente aguardando retorno sem follow-up aberto vinculado",
-        statusLabel: "Aguardando retorno",
+        statusLabel: date < TODAY ? "Em atraso" : "Aguardando retorno",
         canReschedule: false,
         canComplete: false,
       },

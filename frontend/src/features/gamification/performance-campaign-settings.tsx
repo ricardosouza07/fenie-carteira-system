@@ -468,7 +468,7 @@ export function PerformanceCampaignSettings() {
                     className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
                   >
                     <option value="ativo">Ativo</option>
-                    <option value="inativo">Inativo</option>
+                    <option value="inativo">Inativo antigo</option>
                   </select>
                 </label>
 

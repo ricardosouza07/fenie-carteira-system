@@ -45,6 +45,11 @@ import type {
   ContactStatus,
   WorkStatus,
 } from "@/features/carteira/types";
+import {
+  getLastConversionDate,
+  getOperationalClientLevel,
+  isClientConverted,
+} from "@/features/carteira/operational-rules";
 import { useGamification } from "@/features/gamification/gamification-provider";
 import { getCurrentPeriod } from "@/lib/current-period";
 import { cn } from "@/lib/utils";
@@ -89,7 +94,7 @@ const eventTypeOptions: SelectOption[] = [
   { value: "proxima_compra", label: "Proxima compra" },
   { value: "follow_up", label: "Follow-up" },
   { value: "visita", label: "Visita" },
-  { value: "vencido", label: "Vencido" },
+  { value: "vencido", label: "Recompra" },
   { value: "convertido", label: "Convertido" },
 ];
 
@@ -101,7 +106,7 @@ const statusOptions: SelectOption[] = [
   { value: "convertido", label: "Convertido" },
   { value: "visita", label: "Visita encaminhada" },
   { value: "aberto", label: "Follow-up aberto" },
-  { value: "vencido", label: "Vencido" },
+  { value: "vencido", label: "Recompra / atraso" },
   { value: "concluido", label: "Concluido" },
 ];
 
@@ -133,7 +138,7 @@ const eventTypeConfig: Record<
     chip: "border-warning/70 bg-warning text-warning-foreground",
   },
   vencido: {
-    label: "Vencido",
+    label: "Recompra",
     dot: "bg-danger-soft-foreground",
     badge: "danger",
     chip: "border-danger-soft bg-danger-soft text-danger-soft-foreground",
@@ -267,6 +272,10 @@ function getEventTitle(type: CalendarEventType) {
 }
 
 function localBaseEventType(client: CarteiraClient): CalendarEventType {
+  if (isClientConverted(client, TODAY)) {
+    return "convertido";
+  }
+
   if (client.status === "visita") {
     return "visita";
   }
@@ -303,19 +312,27 @@ function applyRuntimeState(
   }
 
   if (event.source === "follow_up") {
-    const type = date < TODAY ? "vencido" : "follow_up";
-
     return {
       ...event,
       date,
-      type,
-      title: getEventTitle(type),
-      statusLabel: type === "vencido" ? "Vencido" : event.statusLabel,
+      type: "follow_up",
+      title: getEventTitle("follow_up"),
+      statusLabel: date < TODAY ? "Em atraso" : event.statusLabel,
+    };
+  }
+
+  if (event.source === "status" && event.type === "follow_up") {
+    return {
+      ...event,
+      date,
+      type: "follow_up",
+      title: getEventTitle("follow_up"),
+      statusLabel: date < TODAY ? "Em atraso" : event.statusLabel,
     };
   }
 
   if (
-    (event.source === "proxima_compra" || event.source === "status") &&
+    event.source === "proxima_compra" &&
     event.type !== "visita" &&
     event.type !== "convertido"
   ) {
@@ -326,6 +343,7 @@ function applyRuntimeState(
       date,
       type,
       title: getEventTitle(type),
+      statusLabel: type === "vencido" ? "Recompra" : event.statusLabel,
     };
   }
 
@@ -369,8 +387,7 @@ function buildSessionInteractionEvents({
       interaction.status === "visita" ? "visita" : "follow_up";
     const eventId = `session-interaction-${interaction.id}`;
     const date = resolveDate(eventId, interaction.proximoFollowUp, reschedules);
-    const type =
-      date < TODAY && fallbackType !== "visita" ? "vencido" : fallbackType;
+    const type = fallbackType;
 
     return [
       {
@@ -382,7 +399,8 @@ function buildSessionInteractionEvents({
         customerHref: customerHref(client),
         title: getEventTitle(type),
         description: interaction.observacao ?? "Follow-up criado na sessao",
-        statusLabel: type === "vencido" ? "Vencido" : "Aberto",
+        statusLabel:
+          date < TODAY && type === "follow_up" ? "Em atraso" : "Aberto",
         canReschedule: true,
         canComplete: true,
       },
@@ -402,33 +420,50 @@ function buildLocalCalendarEvents({
   const events: CalendarEvent[] = [];
 
   clients.forEach((client) => {
+    const converted = isClientConverted(client, TODAY);
+
     if (client.proximaCompra) {
       const baseType = localBaseEventType(client);
-      const eventId = `local-${baseType}-${client.id}`;
-      const date = resolveDate(eventId, client.proximaCompra, reschedules);
-      const type = date < TODAY && baseType !== "visita" ? "vencido" : baseType;
 
-      events.push({
-        id: eventId,
-        type,
-        source: baseType === "follow_up" ? "status" : "proxima_compra",
-        date,
-        client,
-        customerHref: customerHref(client),
-        title: getEventTitle(type),
-        description:
-          baseType === "visita"
-            ? "Visita comercial encaminhada"
-            : "Proxima compra ou retorno previsto",
-        statusLabel: type === "vencido" ? "Vencido" : "Previsto",
-        canReschedule: false,
-        canComplete: false,
-      });
+      if (!converted || baseType !== "convertido") {
+        const eventId = `local-${baseType}-${client.id}`;
+        const date = resolveDate(eventId, client.proximaCompra, reschedules);
+        const type =
+          baseType === "follow_up" || baseType === "visita"
+            ? baseType
+            : date < TODAY
+              ? "vencido"
+              : baseType;
+
+        events.push({
+          id: eventId,
+          type,
+          source: baseType === "follow_up" ? "status" : "proxima_compra",
+          date,
+          client,
+          customerHref: customerHref(client),
+          title: getEventTitle(type),
+          description:
+            baseType === "visita"
+              ? "Visita comercial encaminhada"
+              : "Proxima compra ou retorno previsto",
+          statusLabel:
+            baseType === "follow_up" && date < TODAY
+              ? "Em atraso"
+              : type === "vencido"
+                ? "Recompra"
+                : "Previsto",
+          canReschedule: false,
+          canComplete: false,
+        });
+      }
     }
 
-    if (client.status === "convertido" && client.ultimaAcao.data) {
+    const conversionDate = getLastConversionDate(client);
+
+    if (converted && conversionDate) {
       const eventId = `local-converted-${client.id}`;
-      const date = resolveDate(eventId, client.ultimaAcao.data, reschedules);
+      const date = resolveDate(eventId, conversionDate, reschedules);
 
       events.push({
         id: eventId,
@@ -466,7 +501,11 @@ function eventMatchesStatus(event: CalendarEvent, status: StatusFilter) {
   }
 
   if (status === "vencido") {
-    return event.type === "vencido" || event.statusLabel.toLowerCase() === "vencido";
+    return (
+      event.type === "vencido" ||
+      event.statusLabel.toLowerCase() === "recompra" ||
+      event.statusLabel.toLowerCase() === "em atraso"
+    );
   }
 
   return event.client.status === status;
@@ -730,6 +769,8 @@ function DayEventsPanel({
           <div className="space-y-3">
             {events.map((event) => {
               const config = eventTypeConfig[event.type];
+              const operationalLevel =
+                getOperationalClientLevel(event.client, TODAY) ?? "convertido";
 
               return (
                 <article
@@ -741,7 +782,7 @@ function DayEventsPanel({
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant={config.badge}>{config.label}</Badge>
                         <Badge variant="outline">{event.statusLabel}</Badge>
-                        <StatusBadge status={event.client.nivel} />
+                        <StatusBadge status={operationalLevel} />
                         <StatusBadge status={event.client.status} />
                       </div>
                       <h3 className="mt-2 truncate font-medium text-foreground">
@@ -922,7 +963,7 @@ export function CalendarioView({
   );
   const counts = {
     total: monthEvents.length,
-    vencidos: monthEvents.filter((event) => event.type === "vencido").length,
+    recompra: monthEvents.filter((event) => event.type === "vencido").length,
     visitas: monthEvents.filter((event) => event.type === "visita").length,
     convertidos: monthEvents.filter((event) => event.type === "convertido").length,
   };
@@ -1007,8 +1048,8 @@ export function CalendarioView({
           ? {
               ...calendarEvent,
               date: rescheduleDraft,
-              type: rescheduleDraft < TODAY ? "vencido" : "follow_up",
-              statusLabel: rescheduleDraft < TODAY ? "Vencido" : "Aberto",
+              type: "follow_up",
+              statusLabel: rescheduleDraft < TODAY ? "Em atraso" : "Aberto",
             }
           : calendarEvent,
       ),
@@ -1203,9 +1244,9 @@ export function CalendarioView({
         </Card>
         <Card>
           <CardContent className="p-3">
-            <div className="text-xs text-muted-foreground">Vencidos</div>
+            <div className="text-xs text-muted-foreground">Recompra</div>
             <div className="mt-1 text-2xl font-semibold text-danger-soft-foreground">
-              {counts.vencidos}
+              {counts.recompra}
             </div>
           </CardContent>
         </Card>

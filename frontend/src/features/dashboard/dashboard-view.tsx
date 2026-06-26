@@ -34,6 +34,14 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { useCarteiraClientsSource } from "@/features/carteira/client-store";
+import { getClientFinancialStatus } from "@/features/carteira/financial-status";
+import {
+  getOperationalClientLevel,
+  isClientConverted,
+  isClientInRecompra,
+  isClientOldInactive,
+  matchesOperationalLevel,
+} from "@/features/carteira/operational-rules";
 import { useGamification } from "@/features/gamification/gamification-provider";
 import { MonthlyAchievementsPanel } from "@/features/gamification/monthly-achievements-panel";
 import type {
@@ -234,10 +242,6 @@ function getDayOfMonth(date: string | null) {
   return parsedDate.getUTCDate();
 }
 
-function isOverdue(date: string | null) {
-  return Boolean(date && date < TODAY);
-}
-
 function isWorkedInPeriod(client: CarteiraClient, month: string, year: string) {
   return (
     client.status !== "nao_trabalhado" &&
@@ -253,24 +257,24 @@ function isConvertedInPeriod(
   return client.status === "convertido" && isInPeriod(client.ultimaAcao.data, month, year);
 }
 
-function isOldInactive(client: CarteiraClient) {
-  return client.nivel === "inativo" && client.diasSemComprar >= 180;
-}
-
 function isFollowUpOverdue(client: CarteiraClient) {
   return (
-    isOverdue(client.proximaCompra) &&
+    isClientInRecompra(client, TODAY) &&
     ["aguardando", "contatado", "visita"].includes(client.status)
   );
 }
 
 function isPending(client: CarteiraClient) {
+  if (isClientConverted(client, TODAY)) {
+    return false;
+  }
+
   return (
     isFollowUpOverdue(client) ||
-    isOverdue(client.proximaCompra) ||
+    isClientInRecompra(client, TODAY) ||
     client.status === "aguardando" ||
     client.status === "nao_trabalhado" ||
-    client.nivel === "risco"
+    matchesOperationalLevel(client, "risco", TODAY)
   );
 }
 
@@ -320,7 +324,9 @@ function buildHealthRows(clients: CarteiraClient[]): HealthRow[] {
   const total = clients.length || 1;
 
   return healthOrder.map((item) => {
-    const count = clients.filter((client) => client.nivel === item.status).length;
+    const count = clients.filter((client) =>
+      matchesOperationalLevel(client, item.status, TODAY),
+    ).length;
 
     return {
       status: item.status,
@@ -400,23 +406,27 @@ function buildPriorityRows(clients: CarteiraClient[]) {
       const motives: string[] = [];
       let score = client.diasSemComprar;
 
+      if (isClientConverted(client, TODAY)) {
+        return null;
+      }
+
       if (isFollowUpOverdue(client)) {
-        motives.push("Follow-up vencido");
+        motives.push("Follow-up em atraso");
         score += 500;
       }
 
-      if (client.nivel === "risco") {
+      if (matchesOperationalLevel(client, "risco", TODAY)) {
         motives.push("Cliente em risco");
         score += 380;
       }
 
-      if (isOldInactive(client)) {
+      if (isClientOldInactive(client, TODAY)) {
         motives.push("Inativo antigo");
         score += 320;
       }
 
-      if (isOverdue(client.proximaCompra)) {
-        motives.push("Próxima compra vencida");
+      if (isClientInRecompra(client, TODAY)) {
+        motives.push("Recompra");
         score += 260;
       }
 
@@ -794,7 +804,7 @@ function SellerPerformanceTable({ rows }: { rows: SellerPerformance[] }) {
                 <span className="text-right font-medium text-foreground">
                   {formatCurrency(row.valorRecuperado)}
                 </span>
-                <span>Follow-ups vencidos: {row.followUpsVencidos}</span>
+                <span>Follow-ups em atraso: {row.followUpsVencidos}</span>
                 <span className="text-right">Pontos: {row.pontos}</span>
               </div>
             </Link>
@@ -812,7 +822,7 @@ function SellerPerformanceTable({ rows }: { rows: SellerPerformance[] }) {
                 <TableHead className="text-right">Taxa</TableHead>
                 <TableHead className="text-right">Visitas</TableHead>
                 <TableHead className="text-right">Valor recuperado</TableHead>
-                <TableHead className="text-right">Follow-ups vencidos</TableHead>
+                <TableHead className="text-right">Follow-ups em atraso</TableHead>
                 <TableHead className="text-right">Pontos</TableHead>
                 <TableHead className="text-right">Pendências</TableHead>
               </TableRow>
@@ -894,15 +904,19 @@ function PrioritiesTable({ rows }: { rows: PriorityRow[] }) {
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <StatusBadge status={client.nivel} />
+                <StatusBadge
+                  status={getOperationalClientLevel(client, TODAY) ?? "convertido"}
+                />
                 <StatusBadge status={client.status} />
               </div>
               <div className="mt-3 text-sm text-foreground">{motivo}</div>
               <div className="mt-3 flex items-center justify-between gap-3">
                 <Badge
-                  variant={isOverdue(client.proximaCompra) ? "danger" : "outline"}
+                  variant={isClientInRecompra(client, TODAY) ? "danger" : "outline"}
                 >
-                  {formatDate(client.proximaCompra)}
+                  {isClientInRecompra(client, TODAY)
+                    ? `Recompra · ${formatDate(client.proximaCompra)}`
+                    : formatDate(client.proximaCompra)}
                 </Badge>
                 <Button asChild variant="outline" size="sm">
                   <Link href={`/clientes/${client.id}`}>Ver cliente</Link>
@@ -945,7 +959,11 @@ function PrioritiesTable({ rows }: { rows: PriorityRow[] }) {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <StatusBadge status={client.nivel} />
+                    <StatusBadge
+                      status={
+                        getOperationalClientLevel(client, TODAY) ?? "convertido"
+                      }
+                    />
                   </TableCell>
                   <TableCell>
                     <StatusBadge status={client.status} />
@@ -956,10 +974,12 @@ function PrioritiesTable({ rows }: { rows: PriorityRow[] }) {
                   <TableCell>
                     <Badge
                       variant={
-                        isOverdue(client.proximaCompra) ? "danger" : "outline"
+                        isClientInRecompra(client, TODAY) ? "danger" : "outline"
                       }
                     >
-                      {formatDate(client.proximaCompra)}
+                      {isClientInRecompra(client, TODAY)
+                        ? `Recompra · ${formatDate(client.proximaCompra)}`
+                        : formatDate(client.proximaCompra)}
                     </Badge>
                   </TableCell>
                   <TableCell>{client.vendedor}</TableCell>
@@ -1042,13 +1062,17 @@ export function DashboardView({
       : fallbackGamificationSummary;
 
   const dashboard = useMemo(() => {
-    const riskClients = filteredClients.filter((client) => client.nivel === "risco");
-    const oldInactiveClients = filteredClients.filter(isOldInactive);
+    const riskClients = filteredClients.filter((client) =>
+      matchesOperationalLevel(client, "risco", TODAY),
+    );
+    const oldInactiveClients = filteredClients.filter((client) =>
+      isClientOldInactive(client, TODAY),
+    );
     const workedClients = filteredClients.filter((client) =>
       isWorkedInPeriod(client, month, year),
     );
     const convertedClients = filteredClients.filter((client) =>
-      isConvertedInPeriod(client, month, year),
+      isClientConverted(client, TODAY),
     );
     const followUpsOverdue = filteredClients.filter(isFollowUpOverdue);
     const followUpsToday = filteredClients.filter(
@@ -1066,10 +1090,14 @@ export function DashboardView({
       (client) => client.status === "nao_trabalhado",
     );
     const riskWithoutContact = filteredClients.filter(
-      (client) => client.nivel === "risco" && client.status === "nao_trabalhado",
+      (client) =>
+        matchesOperationalLevel(client, "risco", TODAY) &&
+        client.status === "nao_trabalhado",
     );
     const inactiveWithoutAction = filteredClients.filter(
-      (client) => client.nivel === "inativo" && client.status === "nao_trabalhado",
+      (client) =>
+        isClientOldInactive(client, TODAY) &&
+        client.status === "nao_trabalhado",
     );
     const recoveredValue = convertedClients.reduce(
       (total, client) => total + getRecoveredValue(client),
@@ -1077,10 +1105,12 @@ export function DashboardView({
     );
     const fallbackMetrics: DashboardMetrics = {
       totalClientes: filteredClients.length,
-      saudaveis: filteredClients.filter((client) => client.nivel === "saudavel")
-        .length,
-      atencao: filteredClients.filter((client) => client.nivel === "atencao")
-        .length,
+      saudaveis: filteredClients.filter((client) =>
+        matchesOperationalLevel(client, "saudavel", TODAY),
+      ).length,
+      atencao: filteredClients.filter((client) =>
+        matchesOperationalLevel(client, "atencao", TODAY),
+      ).length,
       risco: riskClients.length,
       inativosAntigos: oldInactiveClients.length,
       trabalhadosMes: workedClients.length,
@@ -1093,6 +1123,15 @@ export function DashboardView({
       followUpsHoje: followUpsToday.length,
       contatosRealizados: workedClients.length,
       pontosMes: gamificationSummary.totalPoints,
+      clientesInadimplentes: filteredClients.filter(
+        (client) => getClientFinancialStatus(client) === "inadimplente",
+      ).length,
+      clientesBloqueados: filteredClients.filter(
+        (client) => getClientFinancialStatus(client) === "bloqueado",
+      ).length,
+      negociacoesFinanceiras: filteredClients.filter(
+        (client) => getClientFinancialStatus(client) === "negociacao",
+      ).length,
     };
     const metrics =
       useSupabaseTotals && initialDashboard.metrics
@@ -1158,10 +1197,10 @@ export function DashboardView({
           tone: "success",
         },
         {
-          label: "Follow-ups vencidos",
+          label: "Follow-ups em atraso",
           value: String(metrics.followUpsVencidos),
           hint: "Retornos fora do prazo",
-          href: buildCarteiraHref({ proxima: "vencidas" }),
+          href: "/agenda",
           icon: RefreshCw,
           tone: "warning",
         },
@@ -1171,6 +1210,30 @@ export function DashboardView({
           hint: "Clientes já acionados",
           href: getStatusFilter("aguardando"),
           icon: Clock3,
+          tone: "warning",
+        },
+        {
+          label: "Clientes inadimplentes",
+          value: String(metrics.clientesInadimplentes),
+          hint: "Consultar financeiro",
+          href: buildCarteiraHref({ financeiro: "inadimplente" }),
+          icon: ShieldAlert,
+          tone: "danger",
+        },
+        {
+          label: "Clientes bloqueados",
+          value: String(metrics.clientesBloqueados),
+          hint: "Venda bloqueada",
+          href: buildCarteiraHref({ financeiro: "bloqueado" }),
+          icon: ShieldAlert,
+          tone: "danger",
+        },
+        {
+          label: "Negociações financeiras",
+          value: String(metrics.negociacoesFinanceiras),
+          hint: "Regularização em andamento",
+          href: buildCarteiraHref({ financeiro: "negociacao" }),
+          icon: DollarSign,
           tone: "warning",
         },
         {
@@ -1216,10 +1279,10 @@ export function DashboardView({
       ] satisfies DashboardKpi[],
       alerts: [
         {
-          label: "Follow-ups vencidos",
+          label: "Follow-ups em atraso",
           count: metrics.followUpsVencidos,
           description: "Retornos com prazo anterior a hoje",
-          href: buildCarteiraHref({ proxima: "vencidas" }),
+          href: "/agenda",
           tone: "warning",
         },
         {

@@ -6,7 +6,7 @@ A rota `/agenda` passa a carregar pendências reais do Supabase, preservando o f
 
 ## Tabelas usadas
 
-- `follow_ups`: follow-ups abertos, vencidos, de hoje e próximos 7 dias.
+- `follow_ups`: follow-ups abertos, em atraso, de hoje e próximos 7 dias.
 - `customers`: dados comerciais e status operacional do cliente.
 - `customer_contacts`: telefone principal do cliente.
 - `portfolio_items`: carteira atual, classificação, status, próxima compra prevista e vendedor vinculado.
@@ -24,7 +24,7 @@ O serviço `loadAgendaFromSupabase` executa:
 4. Busca `customers`, `customer_contacts` e `salespeople`.
 5. Normaliza os dados para `AgendaItem`.
 6. Classifica cada item nos grupos:
-   - vencidos;
+   - em atraso;
    - hoje;
    - próximos 7 dias;
    - aguardando retorno;
@@ -38,7 +38,9 @@ Ao reagendar um item com `followUpId` real:
 
 1. A action `rescheduleAgendaFollowUpAction` chama o service server-side.
 2. `follow_ups.due_at` é atualizado.
-3. O status fica `vencido` se a nova data for anterior a hoje, ou `aberto` caso contrário.
+3. O status técnico fica `vencido` se a nova data for anterior a hoje, ou `aberto` caso contrário. Na interface, esse status aparece como "Em atraso".
+
+Clientes cuja próxima compra prevista já passou aparecem como "Recompra", seguindo `docs/REGRAS_OPERACIONAIS_FENIE.md`. Clientes convertidos nos últimos 30 dias não entram nesse grupo.
 4. A agenda atualiza localmente e tenta recarregar os dados reais.
 
 Se o item não possuir follow-up real ou o Supabase não estiver configurado, o reagendamento fica local/mock.

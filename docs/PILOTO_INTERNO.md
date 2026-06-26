@@ -53,7 +53,7 @@ Dados:
 
 ### Agenda
 
-- Ver vencidos.
+- Ver Recompra.
 - Ver tarefas de hoje.
 - Reagendar follow-up.
 - Concluir follow-up.

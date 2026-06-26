@@ -1,9 +1,9 @@
 import type { CarteiraClient } from "@/features/carteira/types";
 
-export type AgendaFilter = "hoje" | "vencidos" | "semana" | "todos";
+export type AgendaFilter = "hoje" | "recompra" | "semana" | "todos";
 
 export type AgendaGroupKey =
-  | "vencidos"
+  | "recompra"
   | "hoje"
   | "proximos_7"
   | "aguardando"

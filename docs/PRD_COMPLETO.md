@@ -167,7 +167,7 @@ Necessidades:
 - Clientes ainda não trabalhados.
 - Clientes trabalhados no período.
 - Clientes aguardando retorno.
-- Clientes com próxima compra vencida.
+- Clientes em Recompra.
 
 ### 6.2 Indicadores de reativação
 
@@ -182,7 +182,7 @@ Necessidades:
 
 - Contatos registrados por vendedor.
 - Follow-ups pendentes por vendedor.
-- Follow-ups vencidos.
+- Follow-ups em atraso.
 - Visitas encaminhadas.
 - Performance contra meta.
 - Ranking por conversão e valor recuperado.
@@ -193,12 +193,12 @@ Necessidades:
 
 Regra padrão:
 
-- 0 a 30 dias sem comprar: saudável.
-- 31 a 60 dias sem comprar: atenção.
-- 61 a 89 dias sem comprar: risco.
-- 90 dias ou mais sem comprar: inativo antigo.
+- 0 a 59 dias sem comprar: saudável.
+- 60 a 89 dias sem comprar: atenção.
+- 90 a 179 dias sem comprar: risco.
+- 180 dias ou mais sem comprar: inativo antigo.
 
-Observação: os documentos originais citam "61-90 dias = risco" e "90+ dias = inativo antigo", o que cria sobreposição no dia 90. Para o sistema, o dia 90 deve pertencer a "inativo antigo", seguindo a própria planilha, onde inativos antigos começam em 90 dias.
+Decisão vigente: seguir `docs/REGRAS_OPERACIONAIS_FENIE.md`. Cliente convertido nos últimos 30 dias tem prioridade operacional e não deve aparecer como Atenção, Risco, Inativo antigo ou Recompra.
 
 Fallbacks:
 
@@ -245,7 +245,7 @@ Regras:
 
 - A coluna `Próxima compra prevista` alimenta automaticamente o calendário.
 - Um vendedor pode criar follow-up manual.
-- Follow-ups vencidos devem aparecer em destaque.
+- Follow-ups em atraso devem aparecer em destaque.
 - Ao registrar uma nova interação, o vendedor pode definir a próxima ação.
 - O histórico do follow-up concluído deve apontar para a interação registrada.
 
@@ -321,7 +321,7 @@ Funcionalidades:
 - Progresso da carteira trabalhada.
 - Convertidos no mês.
 - Valor recuperado.
-- Follow-ups pendentes e vencidos.
+- Follow-ups pendentes e em atraso.
 - Performance por vendedor.
 - Filtros por mês, vendedor, cidade e classificação.
 
@@ -376,7 +376,7 @@ Funcionalidades:
 - Calendário mensal.
 - Clientes por data de próxima compra.
 - Agendamentos manuais.
-- Pendências vencidas.
+- Pendências em atraso.
 - Lista de hoje.
 - Conclusão de follow-up com registro de interação.
 
@@ -384,7 +384,7 @@ Critérios de aceite:
 
 - Um cliente com próxima compra prevista aparece no calendário.
 - Um follow-up manual pode ser criado para cliente existente.
-- Follow-ups vencidos aparecem em destaque.
+- Follow-ups em atraso aparecem em destaque.
 - Concluir follow-up cria ou vincula interação.
 
 ### 8.7 Relatórios e exportações
@@ -396,7 +396,7 @@ Funcionalidades:
 - Performance por vendedor.
 - Clientes convertidos.
 - Clientes trabalhados.
-- Follow-ups vencidos.
+- Follow-ups em atraso.
 - Histórico de interações.
 
 Critérios de aceite:
@@ -533,7 +533,7 @@ Camadas:
 - aberto.
 - concluido.
 - cancelado.
-- vencido.
+- em atraso.
 
 `import_status`
 
@@ -838,7 +838,7 @@ Campos:
 
 `follow_ups_open`
 
-- Lista follow-ups abertos e vencidos.
+- Lista follow-ups abertos e em atraso.
 
 `seller_performance_monthly`
 
@@ -982,7 +982,7 @@ Elementos:
 - Progresso contra meta.
 - Carteira por classificação.
 - Performance por vendedor.
-- Alertas de follow-up vencido.
+- Alertas de follow-up em atraso.
 
 Referência visual:
 
@@ -1034,7 +1034,7 @@ Elementos:
 - Lista do dia.
 - Próximas compras previstas.
 - Follow-ups manuais.
-- Pendências vencidas.
+- Pendências em atraso.
 - Ação para registrar contato.
 
 ### 12.7 Relatórios
@@ -1215,7 +1215,7 @@ Critério de pronto:
 
 ### 15.1 Ambiguidade da classificação
 
-Há sobreposição entre risco até 90 dias e inativo antigo a partir de 90 dias. Recomendação: usar 90 dias ou mais como inativo antigo.
+Resolvido: a classificação vigente usa Atenção de 60 a 89 dias, Risco de 90 a 179 dias e Inativo antigo a partir de 180 dias. A regra completa está em `docs/REGRAS_OPERACIONAIS_FENIE.md`.
 
 ### 15.2 Vendedor do CRM versus usuário do sistema
 
@@ -1256,4 +1256,3 @@ O MVP será considerado bem-sucedido quando:
 8. Relatórios.
 9. Metas.
 10. Pontuação, se validada.
-

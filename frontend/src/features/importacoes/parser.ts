@@ -1,6 +1,10 @@
 import * as XLSX from "xlsx";
 
 import type { CarteiraClient, ClientLevel } from "@/features/carteira/types";
+import {
+  calculateClientHealthStatus,
+  getClientHealthLabel,
+} from "@/features/carteira/operational-rules";
 import { getCurrentPeriod } from "@/lib/current-period";
 
 import type {
@@ -16,10 +20,13 @@ const HEADER_SCAN_LIMIT = 40;
 const columnLabels: Record<ImportColumnKey, string> = {
   razaoSocial: "Razão Social",
   nomeFantasia: "Nome fantasia",
+  documento: "CNPJ/CPF",
+  inscricaoEstadual: "Inscrição Estadual",
   email: "E-mail",
   telefone: "Telefone",
   cidade: "Cidade",
   estado: "Estado",
+  ultimoPedidoNumero: "Último pedido",
   dataUltimoPedido: "Data do último pedido",
   vendedorUltimoPedido: "Vendedor do último pedido",
   valorUltimoPedido: "Valor do último pedido",
@@ -27,23 +34,43 @@ const columnLabels: Record<ImportColumnKey, string> = {
   cicloMedioCompra: "Ciclo médio de compra",
   proximaCompraPrevista: "Próxima compra prevista",
   situacao: "Situação",
+  dataCadastro: "Data de cadastro",
+  origemCadastro: "Origem do cadastro",
   bairro: "Bairro",
   cep: "CEP",
   endereco: "Endereço",
+  acessoB2B: "Acesso B2B",
+  segmento: "Segmento",
+  tagsCliente: "Tags de cliente",
+  proximaTarefa: "Próxima tarefa",
+  dataTarefa: "Data da tarefa",
 };
 
 const columnSynonyms: Record<ImportColumnKey, string[]> = {
   razaoSocial: ["razao social", "razão social", "cliente", "nome cliente"],
   nomeFantasia: ["nome fantasia", "fantasia", "apelido", "nome comercial"],
+  documento: ["cnpj/cpf", "cpf/cnpj", "cnpj cpf", "cpf", "cnpj", "documento"],
+  inscricaoEstadual: [
+    "inscricao estadual",
+    "inscrição estadual",
+    "ie",
+    "insc estadual",
+  ],
   email: ["e-mail", "email", "mail"],
   telefone: ["telefone", "celular", "fone", "whatsapp", "whats app"],
   cidade: ["cidade", "municipio", "município"],
   estado: ["estado", "uf"],
+  ultimoPedidoNumero: [
+    "ultimo pedido",
+    "último pedido",
+    "numero do ultimo pedido",
+    "número do último pedido",
+    "numero pedido",
+    "pedido",
+  ],
   dataUltimoPedido: [
     "data do ultimo pedido",
     "data do último pedido",
-    "ultimo pedido",
-    "último pedido",
     "dt ultimo pedido",
     "data ultima compra",
     "data última compra",
@@ -86,9 +113,16 @@ const columnSynonyms: Record<ImportColumnKey, string[]> = {
     "previsão recompra",
   ],
   situacao: ["situacao", "situação", "status", "situacao original"],
+  dataCadastro: ["data de cadastro", "cadastro em", "dt cadastro"],
+  origemCadastro: ["origem do cadastro", "origem cadastro"],
   bairro: ["bairro", "distrito"],
   cep: ["cep", "codigo postal", "código postal"],
   endereco: ["endereco", "endereço", "logradouro", "rua"],
+  acessoB2B: ["acesso b2b", "b2b"],
+  segmento: ["segmento", "segmento cliente"],
+  tagsCliente: ["tags de cliente", "tag cliente", "tags", "tag"],
+  proximaTarefa: ["proxima tarefa", "próxima tarefa", "tarefa"],
+  dataTarefa: ["data da tarefa", "dt tarefa", "prazo tarefa"],
 };
 
 const normalizedSynonyms = Object.fromEntries(
@@ -116,6 +150,7 @@ function normalizeText(value: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
 
@@ -125,6 +160,45 @@ function cellText(value: unknown) {
   }
 
   return String(value ?? "").trim();
+}
+
+function collapseWhitespace(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function normalizeDocument(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function normalizeSinglePhone(value: string) {
+  let digits = value.replace(/\D/g, "");
+
+  if (digits.startsWith("55") && digits.length > 11) {
+    digits = digits.slice(2);
+  }
+
+  return digits;
+}
+
+function normalizePhoneList(value: string) {
+  return value
+    .split(/[,;/|]+/)
+    .map((phone) => normalizeSinglePhone(phone))
+    .filter((phone) => phone.length >= 8);
+}
+
+function primaryPhone(value: string) {
+  const [firstPhone] = value.split(/[,;/|]+/).map(collapseWhitespace);
+
+  return firstPhone || collapseWhitespace(value);
+}
+
+function normalizeState(value: string) {
+  return collapseWhitespace(value).toUpperCase();
+}
+
+function normalizeSellerName(value: string) {
+  return collapseWhitespace(value);
 }
 
 function recognizeColumn(value: unknown): ImportColumnKey | null {
@@ -353,19 +427,9 @@ function classifyClient(days: number): {
   nivel: ClientLevel;
   label: string;
 } {
-  if (days <= 30) {
-    return { nivel: "saudavel", label: "Saudável" };
-  }
+  const nivel = calculateClientHealthStatus(days);
 
-  if (days <= 60) {
-    return { nivel: "atencao", label: "Atenção" };
-  }
-
-  if (days <= 89) {
-    return { nivel: "risco", label: "Risco" };
-  }
-
-  return { nivel: "inativo", label: "Inativo antigo" };
+  return { nivel, label: getClientHealthLabel(nivel) };
 }
 
 function getRowValue(
@@ -379,19 +443,25 @@ function getRowValue(
 }
 
 function duplicateKeyFor(row: ImportPreviewRow) {
-  const phoneDigits = row.telefone.replace(/\D/g, "");
+  const [phoneDigits] = row.telefonesNormalizados;
 
-  if (phoneDigits.length >= 8) {
+  if (phoneDigits) {
     return `tel:${phoneDigits}`;
   }
 
-  const name = normalizeText(`${row.razaoSocial} ${row.nomeFantasia}`);
-
-  if (!name) {
-    return null;
+  if (row.documentoNormalizado.length >= 11) {
+    return `doc:${row.documentoNormalizado}`;
   }
 
-  return `nome:${name}:${normalizeText(row.cidade)}`;
+  if (row.razaoSocialNormalizada) {
+    return `razao:${row.razaoSocialNormalizada}`;
+  }
+
+  if (row.nomeFantasiaNormalizado && row.cidadeNormalizada) {
+    return `fantasia:${row.nomeFantasiaNormalizado}:${row.cidadeNormalizada}`;
+  }
+
+  return null;
 }
 
 function buildClient(importId: string, row: ImportPreviewRow): CarteiraClient {
@@ -401,6 +471,8 @@ function buildClient(importId: string, row: ImportPreviewRow): CarteiraClient {
     cliente: row.nomeFantasia || row.razaoSocial || row.cliente,
     razaoSocial: row.razaoSocial || undefined,
     nomeFantasia: row.nomeFantasia || undefined,
+    documento: row.documento || undefined,
+    inscricaoEstadual: row.inscricaoEstadual || undefined,
     telefone: row.telefone || "-",
     cidade: row.cidade || "-",
     bairro: row.bairro || "-",
@@ -409,11 +481,21 @@ function buildClient(importId: string, row: ImportPreviewRow): CarteiraClient {
     diasSemComprar: row.diasSemComprar,
     cicloMedioCompraDias: row.cicloMedioCompraDias ?? undefined,
     proximaCompra: row.proximaCompra,
+    ultimoPedidoNumero: row.ultimoPedidoNumero || undefined,
     ultimoPedido: row.ultimoPedido,
     valorUltimoPedido: row.valorUltimoPedido,
     vendedor: row.vendedor || "Sem vendedor",
     vendedorUltimoPedido: row.vendedor || undefined,
     situacaoOriginal: row.situacao || undefined,
+    dataCadastro: row.dataCadastro,
+    origemCadastro: row.origemCadastro || undefined,
+    acessoB2B: row.acessoB2B || undefined,
+    segmento: row.segmento || undefined,
+    tagsCliente: row.tagsCliente || undefined,
+    proximaTarefa: row.proximaTarefa || undefined,
+    dataTarefa: row.dataTarefa,
+    situacaoFinanceira: "adimplente",
+    observacaoFinanceira: null,
     status: "nao_trabalhado",
     ultimaAcao: { tipo: "Importado da planilha", data: null },
   };
@@ -447,13 +529,28 @@ export async function parseImportFile(
     buildColumnMap(rows[headerRowIndex] ?? []);
   const dataRows = rows.slice(headerRowIndex + 1).filter(rowHasContent);
   const previewRows = dataRows.map<ImportPreviewRow>((row, rowIndex) => {
-    const razaoSocial = cellText(getRowValue(row, fieldToIndex, "razaoSocial"));
+    const razaoSocial = collapseWhitespace(
+      cellText(getRowValue(row, fieldToIndex, "razaoSocial")),
+    );
     const nomeFantasia = cellText(
       getRowValue(row, fieldToIndex, "nomeFantasia"),
     );
-    const telefone = cellText(getRowValue(row, fieldToIndex, "telefone"));
-    const cidade = cellText(getRowValue(row, fieldToIndex, "cidade"));
-    const bairro = cellText(getRowValue(row, fieldToIndex, "bairro"));
+    const normalizedNomeFantasia = collapseWhitespace(nomeFantasia);
+    const documento = collapseWhitespace(
+      cellText(getRowValue(row, fieldToIndex, "documento")),
+    );
+    const documentoNormalizado = normalizeDocument(documento);
+    const telefoneRaw = cellText(getRowValue(row, fieldToIndex, "telefone"));
+    const telefone = primaryPhone(telefoneRaw);
+    const telefonesNormalizados = normalizePhoneList(telefoneRaw);
+    const telefoneNormalizado = telefonesNormalizados[0] ?? "";
+    const cidade = collapseWhitespace(
+      cellText(getRowValue(row, fieldToIndex, "cidade")),
+    );
+    const cidadeNormalizada = normalizeText(cidade);
+    const bairro = collapseWhitespace(
+      cellText(getRowValue(row, fieldToIndex, "bairro")),
+    );
     const ultimoPedido = parseDateValue(
       getRowValue(row, fieldToIndex, "dataUltimoPedido"),
     );
@@ -473,15 +570,20 @@ export async function parseImportFile(
         ? addDays(ultimoPedido, cicloMedioCompraDias)
         : null);
     const classification = classifyClient(diasSemComprar);
-    const cliente = nomeFantasia || razaoSocial;
+    const cliente = normalizedNomeFantasia || razaoSocial;
+    const vendedor = normalizeSellerName(
+      cellText(getRowValue(row, fieldToIndex, "vendedorUltimoPedido")),
+    );
     const invalidReasons: string[] = [];
 
     if (!cliente) {
       invalidReasons.push("Cliente sem razão social ou nome fantasia");
     }
 
-    if (!telefone && !cidade) {
-      invalidReasons.push("Informe telefone ou cidade para localizar o cliente");
+    if (!telefone && !documentoNormalizado && !cidade) {
+      invalidReasons.push(
+        "Informe telefone, CNPJ/CPF ou cidade para localizar o cliente",
+      );
     }
 
     if (parsedDiasSemComprar === null && !ultimoPedido) {
@@ -495,16 +597,28 @@ export async function parseImportFile(
       rowNumber: headerRowIndex + rowIndex + 2,
       cliente: cliente || "Cliente sem nome",
       razaoSocial,
-      nomeFantasia,
+      nomeFantasia: normalizedNomeFantasia,
+      documento,
+      documentoNormalizado,
+      inscricaoEstadual: collapseWhitespace(
+        cellText(getRowValue(row, fieldToIndex, "inscricaoEstadual")),
+      ),
       telefone,
+      telefoneNormalizado,
+      telefonesNormalizados,
       email: cellText(getRowValue(row, fieldToIndex, "email")),
       cidade,
-      estado: cellText(getRowValue(row, fieldToIndex, "estado")),
+      cidadeNormalizada,
+      estado: normalizeState(cellText(getRowValue(row, fieldToIndex, "estado"))),
       bairro,
-      endereco: cellText(getRowValue(row, fieldToIndex, "endereco")),
+      endereco: collapseWhitespace(
+        cellText(getRowValue(row, fieldToIndex, "endereco")),
+      ),
       cep: cellText(getRowValue(row, fieldToIndex, "cep")),
-      vendedor: cellText(
-        getRowValue(row, fieldToIndex, "vendedorUltimoPedido"),
+      vendedor,
+      vendedorNormalizado: normalizeText(vendedor),
+      ultimoPedidoNumero: cellText(
+        getRowValue(row, fieldToIndex, "ultimoPedidoNumero"),
       ),
       ultimoPedido,
       valorUltimoPedido:
@@ -513,6 +627,17 @@ export async function parseImportFile(
       cicloMedioCompraDias,
       proximaCompra,
       situacao: cellText(getRowValue(row, fieldToIndex, "situacao")),
+      dataCadastro: parseDateValue(
+        getRowValue(row, fieldToIndex, "dataCadastro"),
+      ),
+      origemCadastro: cellText(getRowValue(row, fieldToIndex, "origemCadastro")),
+      acessoB2B: cellText(getRowValue(row, fieldToIndex, "acessoB2B")),
+      segmento: cellText(getRowValue(row, fieldToIndex, "segmento")),
+      tagsCliente: cellText(getRowValue(row, fieldToIndex, "tagsCliente")),
+      proximaTarefa: cellText(getRowValue(row, fieldToIndex, "proximaTarefa")),
+      dataTarefa: parseDateValue(getRowValue(row, fieldToIndex, "dataTarefa")),
+      razaoSocialNormalizada: normalizeText(razaoSocial),
+      nomeFantasiaNormalizado: normalizeText(normalizedNomeFantasia),
       nivel: classification.nivel,
       classificacaoCalculada: classification.label,
       isValid: invalidReasons.length === 0,
@@ -540,6 +665,9 @@ export async function parseImportFile(
     (row) => row.duplicateKey && (duplicateMap.get(row.duplicateKey) ?? 0) > 1,
   ).length;
   const validRows = previewRows.filter((row) => row.isValid);
+  const uniqueClients = new Set(
+    validRows.map((row) => row.duplicateKey ?? `row:${row.rowNumber}`),
+  ).size;
 
   return {
     fileName: file.name,
@@ -549,6 +677,7 @@ export async function parseImportFile(
     validRows: validRows.length,
     invalidRows: previewRows.length - validRows.length,
     possibleDuplicates,
+    uniqueClients,
     recognizedColumns,
     unrecognizedColumns,
     rows: previewRows,

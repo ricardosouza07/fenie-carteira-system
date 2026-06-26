@@ -586,7 +586,7 @@ Agrega por mês:
 - Clientes trabalhados.
 - Convertidos.
 - Valor recuperado.
-- Follow-ups pendentes e vencidos.
+- Follow-ups pendentes e em atraso.
 
 ### seller_performance_monthly
 
@@ -596,11 +596,11 @@ Agrega por vendedor:
 - Conversões.
 - Valor recuperado.
 - Visitas encaminhadas.
-- Follow-ups vencidos.
+- Follow-ups em atraso.
 
 ### open_follow_ups
 
-Lista follow-ups abertos, com marcação de vencidos.
+Lista follow-ups abertos, com marcação de atrasos.
 
 ## 7. Fluxo de importação da planilha
 
@@ -671,10 +671,12 @@ Resultado possível:
 
 Regra:
 
-- 0 a 30 dias: saudável.
-- 31 a 60 dias: atenção.
-- 61 a 89 dias: risco.
-- 90 dias ou mais: inativo antigo.
+- 0 a 59 dias: saudável.
+- 60 a 89 dias: atenção.
+- 90 a 179 dias: risco.
+- 180 dias ou mais: inativo antigo.
+
+Regra vigente completa: `docs/REGRAS_OPERACIONAIS_FENIE.md`.
 
 Fallback:
 
@@ -716,7 +718,7 @@ Importante:
 5. Acompanha dashboard geral.
 6. Filtra vendedores, cidades e status.
 7. Redistribui clientes se necessário.
-8. Acompanha follow-ups vencidos.
+8. Acompanha follow-ups em atraso.
 9. Exporta relatório mensal.
 10. Fecha o mês.
 
@@ -987,4 +989,3 @@ Ficar fora do MVP:
 - UI: clara, corporativa e orientada a produtividade.
 - MVP: operação de carteira, reativação, follow-up, dashboard e relatórios.
 - Futuro: automações, IA, WhatsApp, gamificação e BI avançado.
-

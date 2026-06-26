@@ -1,6 +1,8 @@
 import type { CarteiraClient } from "./types";
 
-export const carteiraClients: CarteiraClient[] = [
+const carteiraClientsBase: Array<
+  Omit<CarteiraClient, "situacaoFinanceira" | "observacaoFinanceira">
+> = [
   {
     id: "cli-001",
     nivel: "saudavel",
@@ -635,3 +637,33 @@ export const carteiraClients: CarteiraClient[] = [
     ultimaAcao: { tipo: "Visita encaminhada", data: "2026-05-25" },
   },
 ];
+
+const mockFinancialStatusById: Record<
+  string,
+  Pick<CarteiraClient, "situacaoFinanceira" | "observacaoFinanceira">
+> = {
+  "cli-003": {
+    situacaoFinanceira: "inadimplente",
+    observacaoFinanceira:
+      "Pendência financeira aberta. Consultar financeiro antes da negociação.",
+  },
+  "cli-004": {
+    situacaoFinanceira: "bloqueado",
+    observacaoFinanceira:
+      "Cliente bloqueado para novos pedidos até regularização.",
+  },
+  "cli-011": {
+    situacaoFinanceira: "negociacao",
+    observacaoFinanceira: "Negociação financeira em andamento.",
+  },
+};
+
+export const carteiraClients: CarteiraClient[] = carteiraClientsBase.map(
+  (client) => ({
+    ...client,
+    situacaoFinanceira:
+      mockFinancialStatusById[client.id]?.situacaoFinanceira ?? "adimplente",
+    observacaoFinanceira:
+      mockFinancialStatusById[client.id]?.observacaoFinanceira ?? null,
+  }),
+);

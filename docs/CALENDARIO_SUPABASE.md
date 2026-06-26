@@ -14,7 +14,7 @@ desenvolvimento, demos e ambientes sem `.env.local`.
 - `customer_contacts`: telefone principal exibido no evento.
 - `salespeople`: vendedor/responsavel exibido no calendario.
 - `customer_interactions`: visitas encaminhadas, conversoes e status recentes.
-- `follow_ups`: follow-ups abertos, vencidos e concluidos.
+- `follow_ups`: follow-ups abertos, em atraso e concluidos.
 
 ## Query principal
 
@@ -25,7 +25,7 @@ O servico `loadCalendarioFromSupabase` faz:
 3. Busca clientes, contatos, vendedores, interacoes e follow-ups vinculados.
 4. Normaliza os clientes para o tipo `CarteiraClient`.
 5. Monta eventos de calendario com:
-   - follow-ups abertos, vencidos e concluidos;
+   - follow-ups abertos, em atraso e concluidos;
    - proximas compras previstas;
    - visitas encaminhadas;
    - conversoes;
@@ -51,7 +51,9 @@ Cada evento normalizado contem:
 - **Registrar contato**: abre o `InteractionDrawer` e usa o fluxo real ja
   conectado em `customer_interactions`, `follow_ups` e `point_events`.
 - **Reagendar**: quando o evento tem `followUpId`, atualiza `follow_ups.due_at`
-  e recalcula o status como `aberto` ou `vencido`.
+  e recalcula o status tecnico como `aberto` ou `vencido`.
+
+Eventos de próxima compra prevista que já passou aparecem como "Recompra". Follow-ups fora do prazo continuam como "Follow-up" com status visual "Em atraso". As regras completas ficam em `docs/REGRAS_OPERACIONAIS_FENIE.md`.
 - **Concluir**: quando aplicavel, atualiza `follow_ups.status = concluido` e
   preenche `completed_at`.
 

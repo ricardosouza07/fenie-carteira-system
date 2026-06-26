@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, DollarSign, Save, X } from "lucide-react";
+import { AlertTriangle, CalendarDays, DollarSign, Save, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -9,6 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  FINANCIAL_RESTRICTION_MESSAGE,
+  getClientFinancialStatus,
+  hasFinancialRestriction,
+} from "@/features/carteira/financial-status";
+import { getOperationalClientLevel } from "@/features/carteira/operational-rules";
+import { getCurrentPeriod } from "@/lib/current-period";
 import { cn } from "@/lib/utils";
 
 import type {
@@ -19,6 +26,8 @@ import type {
   ContactChannel,
   ContactStatus,
 } from "./types";
+
+const TODAY = getCurrentPeriod().date;
 
 type InteractionDrawerProps = {
   client: CarteiraClient;
@@ -133,6 +142,9 @@ export function InteractionDrawer({
   onClose,
   onSave,
 }: InteractionDrawerProps) {
+  const operationalStatus = getOperationalClientLevel(client, TODAY) ?? "convertido";
+  const financialStatus = getClientFinancialStatus(client);
+  const hasRestrictedFinancialStatus = hasFinancialRestriction(financialStatus);
   const [status, setStatus] = useState<ContactStatus | "">(
     defaultStatus(client.status),
   );
@@ -142,6 +154,10 @@ export function InteractionDrawer({
   const [nextFollowUp, setNextFollowUp] = useState("");
   const [recoveredValue, setRecoveredValue] = useState("");
   const [errors, setErrors] = useState<FieldError>({});
+  const [financialWarningAcknowledged, setFinancialWarningAcknowledged] =
+    useState(false);
+  const showConversionFinancialWarning =
+    status === "convertido" && hasRestrictedFinancialStatus;
 
   const recentInteractions = useMemo(
     () =>
@@ -172,6 +188,12 @@ export function InteractionDrawer({
     setErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0 || !status || !channel) {
+      return;
+    }
+
+    if (showConversionFinancialWarning && !financialWarningAcknowledged) {
+      setFinancialWarningAcknowledged(true);
+
       return;
     }
 
@@ -239,7 +261,7 @@ export function InteractionDrawer({
                     Classificação
                   </div>
                   <div className="mt-1">
-                    <StatusBadge status={client.nivel} />
+                    <StatusBadge status={operationalStatus} />
                   </div>
                 </div>
                 <div>
@@ -260,6 +282,14 @@ export function InteractionDrawer({
                     {client.cidade} / {client.bairro}
                   </div>
                 </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">
+                    Financeiro
+                  </div>
+                  <div className="mt-1">
+                    <StatusBadge status={financialStatus} />
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -269,6 +299,7 @@ export function InteractionDrawer({
               value={status}
               onChange={(value) => {
                 setStatus(value);
+                setFinancialWarningAcknowledged(false);
                 setErrors((current) => ({ ...current, status: undefined }));
               }}
               error={errors.status}
@@ -349,6 +380,27 @@ export function InteractionDrawer({
               ) : null}
             </div>
 
+            {showConversionFinancialWarning ? (
+              <div className="rounded-lg border border-danger-soft/70 bg-danger-soft/35 p-3 text-sm text-danger-soft-foreground">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div>
+                    <div className="font-medium">
+                      Atenção antes de registrar conversão
+                    </div>
+                    <p className="mt-1 text-xs leading-5">
+                      {FINANCIAL_RESTRICTION_MESSAGE}
+                    </p>
+                    {financialWarningAcknowledged ? (
+                      <p className="mt-2 text-xs font-medium">
+                        Clique em Salvar mesmo assim para confirmar a conversão.
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <section className="space-y-2 border-t pt-4">
               <div className="flex items-center justify-between gap-2">
                 <Label>Histórico local</Label>
@@ -389,7 +441,9 @@ export function InteractionDrawer({
             </Button>
             <Button type="submit">
               <Save className="h-4 w-4" />
-              Salvar contato
+              {showConversionFinancialWarning && financialWarningAcknowledged
+                ? "Salvar mesmo assim"
+                : "Salvar contato"}
             </Button>
           </div>
         </form>

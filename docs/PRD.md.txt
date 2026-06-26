@@ -75,10 +75,12 @@ Criar plataforma centralizada para:
 
 # Regras de negócio
 
-0-30 dias = saudável
-31-60 dias = atenção
-61-90 dias = risco
-90+ dias = inativo antigo
+0-59 dias = saudável
+60-89 dias = atenção
+90-179 dias = risco
+180+ dias = inativo antigo
+
+Convertido nos últimos 30 dias tem prioridade operacional e não deve aparecer como atenção, risco, inativo antigo ou recompra.
 
 ---
 

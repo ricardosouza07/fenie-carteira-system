@@ -10,6 +10,11 @@ export type WorkStatus = Extract<
   "nao_trabalhado" | "contatado" | "aguardando" | "convertido" | "visita"
 >;
 
+export type FinancialStatus = Extract<
+  StatusKind,
+  "adimplente" | "inadimplente" | "bloqueado" | "negociacao"
+>;
+
 export type ContactStatus = Extract<
   WorkStatus,
   "contatado" | "aguardando" | "convertido" | "visita"
@@ -44,6 +49,8 @@ export type CarteiraClient = {
   cliente: string;
   razaoSocial?: string;
   nomeFantasia?: string;
+  documento?: string;
+  inscricaoEstadual?: string;
   email?: string;
   telefone: string;
   cidade: string;
@@ -53,11 +60,21 @@ export type CarteiraClient = {
   diasSemComprar: number;
   cicloMedioCompraDias?: number;
   proximaCompra: string | null;
+  ultimoPedidoNumero?: string;
   ultimoPedido: string | null;
   valorUltimoPedido: number;
   vendedor: string;
   vendedorUltimoPedido?: string;
   situacaoOriginal?: string;
+  dataCadastro?: string | null;
+  origemCadastro?: string;
+  acessoB2B?: string;
+  segmento?: string;
+  tagsCliente?: string;
+  proximaTarefa?: string;
+  dataTarefa?: string | null;
+  situacaoFinanceira: FinancialStatus;
+  observacaoFinanceira?: string | null;
   status: WorkStatus;
   ultimaAcao: {
     tipo: string;

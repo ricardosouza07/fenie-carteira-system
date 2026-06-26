@@ -43,6 +43,10 @@ import {
   InteractionPersistenceToastStack,
   type PersistenceToast,
 } from "@/features/carteira/interaction-persistence-toast";
+import {
+  getOperationalClientLevel,
+  isClientConverted,
+} from "@/features/carteira/operational-rules";
 import { addDaysToDateKey, getCurrentPeriod } from "@/lib/current-period";
 import type {
   CarteiraClient,
@@ -70,7 +74,7 @@ type NewFollowUpForm = {
 
 const quickFilters: { value: AgendaFilter; label: string }[] = [
   { value: "hoje", label: "Hoje" },
-  { value: "vencidos", label: "Vencidos" },
+  { value: "recompra", label: "Recompra" },
   { value: "semana", label: "Semana" },
   { value: "todos", label: "Todos" },
 ];
@@ -79,9 +83,9 @@ const groupConfig: Record<
   AgendaGroupKey,
   { title: string; description: string; icon: typeof Clock3 }
 > = {
-  vencidos: {
-    title: "Vencidos",
-    description: "Pendências com prazo anterior a hoje.",
+  recompra: {
+    title: "Recompra",
+    description: "Clientes cuja próxima compra prevista já passou.",
     icon: Clock3,
   },
   hoje: {
@@ -107,7 +111,7 @@ const groupConfig: Record<
 };
 
 const groupOrder: AgendaGroupKey[] = [
-  "vencidos",
+  "recompra",
   "hoje",
   "proximos_7",
   "aguardando",
@@ -163,7 +167,7 @@ function resolveDate(itemId: string, date: string, reschedules: Record<string, s
 
 function getDateGroup(date: string): AgendaGroupKey | null {
   if (date < TODAY) {
-    return "vencidos";
+    return "recompra";
   }
 
   if (date === TODAY) {
@@ -219,7 +223,8 @@ function buildAgendaItems({
             : "Aguardando retorno do cliente",
         prazo: resolveDate(itemId, fallbackDate, reschedules),
         status: client.status,
-        classificacao: client.nivel,
+        classificacao:
+          getOperationalClientLevel(client, TODAY) ?? client.nivel,
       });
 
       return;
@@ -227,7 +232,7 @@ function buildAgendaItems({
 
     const dateGroup = getDateGroup(client.proximaCompra ?? "");
 
-    if (!dateGroup || !client.proximaCompra) {
+    if (!dateGroup || !client.proximaCompra || isClientConverted(client, TODAY)) {
       return;
     }
 
@@ -242,7 +247,8 @@ function buildAgendaItems({
       motivo: "Próxima compra prevista",
       prazo: resolveDate(itemId, client.proximaCompra, reschedules),
       status: client.status,
-      classificacao: client.nivel,
+      classificacao:
+        getOperationalClientLevel(client, TODAY) ?? client.nivel,
     });
   });
 
@@ -274,7 +280,8 @@ function buildAgendaItems({
       motivo: interaction.observacao ?? "Follow-up criado na sessão",
       prazo,
       status: interaction.status,
-      classificacao: client.nivel,
+      classificacao:
+        getOperationalClientLevel(client, TODAY) ?? client.nivel,
     });
   });
 
@@ -296,8 +303,8 @@ function filterAgendaItems(items: AgendaItem[], filter: AgendaFilter) {
     return items.filter((item) => item.prazo === TODAY);
   }
 
-  if (filter === "vencidos") {
-    return items.filter((item) => item.prazo < TODAY);
+  if (filter === "recompra") {
+    return items.filter((item) => item.group === "recompra");
   }
 
   return items.filter((item) => item.prazo >= TODAY && item.prazo <= WEEK_LIMIT);
@@ -544,7 +551,7 @@ export function AgendaView({ initialAgenda }: { initialAgenda: LoadAgendaResult 
   const summary = useMemo(
     () => ({
       pendenciasHoje: agendaItems.filter((item) => item.prazo === TODAY).length,
-      vencidos: agendaItems.filter((item) => item.prazo < TODAY).length,
+      recompra: agendaItems.filter((item) => item.group === "recompra").length,
       contatosFeitos:
         clients.filter((client) => client.status === "contatado").length +
         interactions.length,
@@ -907,8 +914,8 @@ export function AgendaView({ initialAgenda }: { initialAgenda: LoadAgendaResult 
                 tone="warning"
               />
               <AgendaSummaryCard
-                label="Vencidos"
-                value={summary.vencidos}
+                label="Recompra"
+                value={summary.recompra}
                 tone="danger"
               />
               <AgendaSummaryCard
@@ -940,10 +947,10 @@ export function AgendaView({ initialAgenda }: { initialAgenda: LoadAgendaResult 
                 type="button"
                 variant="outline"
                 className="w-full justify-start"
-                onClick={() => setActiveFilter("vencidos")}
+                onClick={() => setActiveFilter("recompra")}
               >
                 <Clock3 className="h-4 w-4" />
-                Ver vencidos
+                Ver recompra
               </Button>
               <Button
                 type="button"

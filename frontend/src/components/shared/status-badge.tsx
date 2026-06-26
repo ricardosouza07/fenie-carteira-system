@@ -9,7 +9,11 @@ export type StatusKind =
   | "contatado"
   | "aguardando"
   | "convertido"
-  | "visita";
+  | "visita"
+  | "adimplente"
+  | "inadimplente"
+  | "bloqueado"
+  | "negociacao";
 
 const statusConfig: Record<
   StatusKind,
@@ -18,12 +22,16 @@ const statusConfig: Record<
   saudavel: { label: "Saudável", variant: "success" },
   atencao: { label: "Atenção", variant: "warning" },
   risco: { label: "Risco", variant: "danger" },
-  inativo: { label: "Inativo", variant: "muted" },
+  inativo: { label: "Inativo antigo", variant: "muted" },
   nao_trabalhado: { label: "Não trabalhado", variant: "muted" },
   contatado: { label: "Contatado", variant: "info" },
   aguardando: { label: "Aguardando retorno", variant: "warning" },
   convertido: { label: "Convertido", variant: "success" },
   visita: { label: "Visita encaminhada", variant: "info" },
+  adimplente: { label: "Adimplente", variant: "success" },
+  inadimplente: { label: "Inadimplente", variant: "danger" },
+  bloqueado: { label: "Bloqueado", variant: "danger" },
+  negociacao: { label: "Em negociação", variant: "warning" },
 };
 
 type StatusBadgeProps = {

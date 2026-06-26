@@ -14,6 +14,7 @@ export type CarteiraColumnId =
   | "proximaCompra"
   | "ultimoPedido"
   | "vendedor"
+  | "situacaoFinanceira"
   | "status"
   | "ultimaAcao";
 
@@ -28,6 +29,7 @@ export const carteiraColumns = [
   { id: "proximaCompra", label: "Próxima compra" },
   { id: "ultimoPedido", label: "Último pedido" },
   { id: "vendedor", label: "Vendedor" },
+  { id: "situacaoFinanceira", label: "Financeiro" },
   { id: "status", label: "Status" },
   { id: "ultimaAcao", label: "Última ação" },
 ] as const satisfies readonly TableColumnOption<CarteiraColumnId>[];
@@ -48,6 +50,7 @@ export const carteiraColumnPresets = [
       "proximaCompra",
       "ultimoPedido",
       "vendedor",
+      "situacaoFinanceira",
       "status",
     ],
   },
@@ -69,9 +72,10 @@ export const carteiraColumnWidths: Record<CarteiraColumnId, number> = {
   proximaCompra: 102,
   ultimoPedido: 104,
   vendedor: 100,
+  situacaoFinanceira: 118,
   status: 110,
   ultimaAcao: 126,
 };
 
 export const CARTEIRA_COLUMNS_STORAGE_KEY =
-  "fenie.table-columns.carteira.v1";
+  "fenie.table-columns.carteira.v2";

@@ -12,7 +12,7 @@ O modulo `/relatorios` agora tenta gerar o fechamento do periodo com dados reais
 - `customer_contacts`: telefone/e-mail principal para normalizacao do cliente.
 - `salespeople`: nomes dos vendedores vinculados.
 - `customer_interactions`: clientes trabalhados, conversoes, canais, valor recuperado e datas de interacao.
-- `follow_ups`: prazos, status, motivos e vencimentos.
+- `follow_ups`: prazos, status, motivos e atrasos de retorno.
 - `point_events`: pontos gerados por vendedor/cliente no periodo.
 
 ## Filtros
@@ -34,9 +34,11 @@ No estado atual, a carga inicial vem do servidor e os filtros sao aplicados no c
 - Taxa de conversao: convertidos dividido por clientes trabalhados.
 - Valor recuperado: soma de `recovered_value` nas conversoes filtradas.
 - Visitas encaminhadas: interacoes/clientes com status `visita`.
-- Follow-ups vencidos: follow-ups com status vencido ou prazo anterior a 2026-05-27.
+- Follow-ups em atraso: follow-ups com status vencido ou prazo anterior ao dia atual.
 - Pontos gerados: soma de `point_events.points` no periodo filtrado.
-- Performance por vendedor: agrega contatos, convertidos, taxa, visitas, valor recuperado, follow-ups vencidos e pontos.
+- Performance por vendedor: agrega contatos, convertidos, taxa, visitas, valor recuperado, follow-ups em atraso e pontos.
+
+As regras de classificacao operacional seguem `docs/REGRAS_OPERACIONAIS_FENIE.md`. Convertidos nos ultimos 30 dias nao entram nos filtros de Atencao, Risco, Inativo antigo ou Recompra.
 
 ## Abas
 

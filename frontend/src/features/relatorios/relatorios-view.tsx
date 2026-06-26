@@ -34,6 +34,13 @@ import type {
   ClientLevel,
   WorkStatus,
 } from "@/features/carteira/types";
+import {
+  getClientHealthLabel,
+  getOperationalClientLevel,
+  isClientConverted,
+  isClientInRecompra,
+  matchesOperationalLevel,
+} from "@/features/carteira/operational-rules";
 import { useGamification } from "@/features/gamification/gamification-provider";
 import type { PointEvent } from "@/features/gamification/types";
 import { getCurrentPeriod } from "@/lib/current-period";
@@ -112,10 +119,10 @@ const statusOptions: SelectOption[] = [
 
 const levelOptions: SelectOption[] = [
   { value: "todas", label: "Todas as classificacoes" },
-  { value: "saudavel", label: "Saudavel" },
-  { value: "atencao", label: "Atencao" },
-  { value: "risco", label: "Risco" },
-  { value: "inativo", label: "Inativo" },
+  { value: "saudavel", label: getClientHealthLabel("saudavel") },
+  { value: "atencao", label: getClientHealthLabel("atencao") },
+  { value: "risco", label: getClientHealthLabel("risco") },
+  { value: "inativo", label: getClientHealthLabel("inativo") },
 ];
 
 const tabs: { value: ReportTab; label: string }[] = [
@@ -213,6 +220,16 @@ function isOverdue(date: string | null) {
   return Boolean(date && date < TODAY);
 }
 
+function getOperationalBadgeStatus(client: CarteiraClient) {
+  return getOperationalClientLevel(client, TODAY) ?? "convertido";
+}
+
+function getOperationalClassificationLabel(client: CarteiraClient) {
+  const level = getOperationalClientLevel(client, TODAY);
+
+  return level ? getClientHealthLabel(level) : "Convertido";
+}
+
 function normalizeText(value: string) {
   return value
     .normalize("NFD")
@@ -259,7 +276,7 @@ function inferClientType(client: CarteiraClient): ClientTypeLabel {
     return "Loja";
   }
 
-  if (client.nivel === "inativo") {
+  if (matchesOperationalLevel(client, "inativo", TODAY)) {
     return "Externo";
   }
 
@@ -278,7 +295,7 @@ function isWorked(client: CarteiraClient, period: string) {
 }
 
 function isConverted(client: CarteiraClient, period: string) {
-  return client.status === "convertido" && isInPeriod(client.ultimaAcao.data, period);
+  return isClientConverted(client, TODAY) && isInPeriod(client.ultimaAcao.data, period);
 }
 
 function isVisit(client: CarteiraClient) {
@@ -295,18 +312,22 @@ function getFollowUpMotivo(client: CarteiraClient) {
   }
 
   if (isOverdue(client.proximaCompra)) {
-    return "Proxima compra vencida";
+    return "Recompra";
   }
 
   return "Proxima compra prevista";
 }
 
 function isPending(client: CarteiraClient) {
+  if (isClientConverted(client, TODAY)) {
+    return false;
+  }
+
   return (
     client.status === "aguardando" ||
     client.status === "nao_trabalhado" ||
-    client.nivel === "risco" ||
-    isOverdue(client.proximaCompra)
+    matchesOperationalLevel(client, "risco", TODAY) ||
+    isClientInRecompra(client, TODAY)
   );
 }
 
@@ -384,7 +405,12 @@ function buildFallbackFollowUpRows(
   period: string,
 ): FollowUpRow[] {
   return clients
-    .filter((client) => client.proximaCompra && isInPeriod(client.proximaCompra, period))
+    .filter(
+      (client) =>
+        client.proximaCompra &&
+        isInPeriod(client.proximaCompra, period) &&
+        !isClientConverted(client, TODAY),
+    )
     .map((client) => {
       const prazo = client.proximaCompra ?? period;
 
@@ -392,9 +418,9 @@ function buildFallbackFollowUpRows(
         id: `follow-up-${client.id}`,
         client,
         prazo,
-        status: isOverdue(prazo) ? "Vencido" : "Aberto",
+        status: isOverdue(prazo) ? "Em atraso" : "Aberto",
         motivo: getFollowUpMotivo(client),
-        situacao: isOverdue(prazo) ? "Vencido" : "No prazo",
+        situacao: isOverdue(prazo) ? "Em atraso" : "No prazo",
       } satisfies FollowUpRow;
     })
     .sort((first, second) => first.prazo.localeCompare(second.prazo));
@@ -430,8 +456,12 @@ function clientMatchesFilters(
   return (
     (filters.vendor === "todos" || client.vendedor === filters.vendor) &&
     (filters.city === "todas" || client.cidade === filters.city) &&
-    (filters.status === "todos" || client.status === filters.status) &&
-    (filters.level === "todas" || client.nivel === filters.level)
+    (filters.status === "todos" ||
+      (filters.status === "convertido"
+        ? isClientConverted(client, TODAY)
+        : client.status === filters.status)) &&
+    (filters.level === "todas" ||
+      matchesOperationalLevel(client, filters.level, TODAY))
   );
 }
 
@@ -514,7 +544,7 @@ function buildSellerPerformanceRows(input: {
   input.followUpRows.forEach((row) => {
     const seller = ensureSeller(row.client.vendedor);
 
-    if (row.situacao === "Vencido") {
+    if (row.situacao === "Em atraso") {
       seller.followUpsVencidos += 1;
       seller.pendencias += 1;
     }
@@ -564,7 +594,7 @@ function buildReport(input: {
   );
   const visits = input.workedRows.filter((row) => isVisit(row.client)).length;
   const overdueFollowUps = input.followUpRows.filter(
-    (row) => row.situacao === "Vencido",
+    (row) => row.situacao === "Em atraso",
   ).length;
   const generatedPoints = input.pointRows.reduce(
     (total, row) => total + row.pontos,
@@ -611,9 +641,9 @@ function buildReport(input: {
         tone: "info",
       },
       {
-        label: "Follow-ups vencidos",
+        label: "Follow-ups em atraso",
         value: String(overdueFollowUps),
-        hint: "Prazos vencidos no filtro",
+        hint: "Prazos em atraso no filtro",
         icon: Clock3,
         tone: overdueFollowUps > 0 ? "warning" : "success",
       },
@@ -634,7 +664,7 @@ function getExportRows(report: ReportData, activeTab: ReportTab) {
       cliente: row.client.cliente,
       vendedor: row.client.vendedor,
       cidade: row.client.cidade,
-      classificacao: row.client.nivel,
+      classificacao: getOperationalClassificationLabel(row.client),
       status: row.client.status,
       ultimaAcao: row.client.ultimaAcao.tipo,
       canal: row.canal,
@@ -828,7 +858,7 @@ function WorkedTable({
               <Badge variant="outline">{row.canal}</Badge>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              <StatusBadge status={row.client.nivel} />
+              <StatusBadge status={getOperationalBadgeStatus(row.client)} />
               <StatusBadge status={row.client.status} />
             </div>
             <div className="mt-3 text-sm">{row.client.ultimaAcao.tipo}</div>
@@ -864,7 +894,7 @@ function WorkedTable({
                 <TableCell>{row.client.vendedor}</TableCell>
                 <TableCell>{row.client.cidade}</TableCell>
                 <TableCell>
-                  <StatusBadge status={row.client.nivel} />
+                  <StatusBadge status={getOperationalBadgeStatus(row.client)} />
                 </TableCell>
                 <TableCell>
                   <StatusBadge status={row.client.status} />
@@ -988,7 +1018,7 @@ function SellerPerformanceTable({
             <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
               <span>Taxa: {formatPercent(row.taxaConversao)}</span>
               <span>Visitas: {row.visitas}</span>
-              <span>Follow-ups: {row.followUpsVencidos}</span>
+              <span>Em atraso: {row.followUpsVencidos}</span>
               <span>Pontos: {row.pontos}</span>
               <span className="col-span-2 font-medium text-foreground">
                 {formatCurrency(row.valorRecuperado)}
@@ -1008,7 +1038,7 @@ function SellerPerformanceTable({
               <TableHead className="text-right">Taxa de conversao</TableHead>
               <TableHead className="text-right">Visitas encaminhadas</TableHead>
               <TableHead className="text-right">Valor recuperado</TableHead>
-              <TableHead className="text-right">Follow-ups vencidos</TableHead>
+              <TableHead className="text-right">Follow-ups em atraso</TableHead>
               <TableHead className="text-right">Pontos</TableHead>
             </TableRow>
           </TableHeader>
@@ -1069,7 +1099,7 @@ function FollowUpsTable({
                   {row.client.vendedor} · {formatDate(row.prazo)}
                 </div>
               </div>
-              <Badge variant={row.situacao === "Vencido" ? "danger" : "success"}>
+              <Badge variant={row.situacao === "Em atraso" ? "danger" : "success"}>
                 {row.situacao}
               </Badge>
             </div>
@@ -1091,7 +1121,7 @@ function FollowUpsTable({
               <TableHead>Prazo</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Motivo</TableHead>
-              <TableHead>Vencido ou no prazo</TableHead>
+              <TableHead>Situação</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1108,7 +1138,7 @@ function FollowUpsTable({
                 <TableCell>{row.motivo}</TableCell>
                 <TableCell>
                   <Badge
-                    variant={row.situacao === "Vencido" ? "danger" : "success"}
+                    variant={row.situacao === "Em atraso" ? "danger" : "success"}
                   >
                     {row.situacao}
                   </Badge>

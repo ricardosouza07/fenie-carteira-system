@@ -40,9 +40,9 @@ export type FollowUpRow = {
   id: string;
   client: CarteiraClient;
   prazo: string;
-  status: "Aberto" | "Vencido" | "Concluido";
+  status: "Aberto" | "Em atraso" | "Concluido";
   motivo: string;
-  situacao: "Vencido" | "No prazo";
+  situacao: "Em atraso" | "No prazo";
 };
 
 export type PointRow = {

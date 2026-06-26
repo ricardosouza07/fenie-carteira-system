@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-O `/dashboard` agora tenta carregar indicadores reais do Supabase antes de usar o fallback local/mock. A leitura real usa a ultima importacao publicada da carteira, interacoes do mes, follow-ups abertos/vencidos, eventos de pontos e a campanha ativa de performance.
+O `/dashboard` agora tenta carregar indicadores reais do Supabase antes de usar o fallback local/mock. A leitura real usa a ultima importacao publicada da carteira, interacoes do mes, follow-ups abertos/em atraso, eventos de pontos e a campanha ativa de performance.
 
 ## Tabelas usadas
 
@@ -12,7 +12,7 @@ O `/dashboard` agora tenta carregar indicadores reais do Supabase antes de usar 
 - `customer_contacts`: telefone/e-mail principal para contexto e navegacao.
 - `salespeople`: nomes dos vendedores responsaveis.
 - `customer_interactions`: contatos, conversoes, visitas, valor recuperado e produtividade do mes.
-- `follow_ups`: pendencias vencidas, retornos de hoje e proximos compromissos.
+- `follow_ups`: pendencias em atraso, retornos de hoje e proximos compromissos.
 - `point_events`: pontuacao mensal da gamificacao.
 - `performance_campaigns` e `performance_campaign_levels`: campanha ativa, marcos e premios.
 
@@ -24,11 +24,13 @@ O `/dashboard` agora tenta carregar indicadores reais do Supabase antes de usar 
 - Convertidos: clientes unicos com interacao `convertido` no mes.
 - Valor recuperado: soma de `customer_interactions.recovered_value` das conversoes do mes.
 - Aguardando retorno e visitas encaminhadas: status operacional normalizado do cliente/item, priorizando a ultima interacao do mes.
-- Follow-ups vencidos: `follow_ups.status` aberto/vencido com `due_at` anterior a 2026-05-27.
-- Follow-ups hoje: `follow_ups.status` aberto/vencido com `due_at` em 2026-05-27.
+- Follow-ups em atraso: `follow_ups.status` aberto/vencido com `due_at` anterior ao dia atual.
+- Follow-ups hoje: `follow_ups.status` aberto/vencido com `due_at` no dia atual.
 - Pontos do mes: soma de `point_events.points` no periodo mensal.
-- Performance por vendedor: agrega interacoes, conversoes, visitas, valor recuperado, follow-ups vencidos e pontos por vendedor.
-- Prioridades: ordena por follow-up vencido, proxima compra vencida, risco sem contato, inativo antigo sem acao e aguardando retorno.
+- Performance por vendedor: agrega interacoes, conversoes, visitas, valor recuperado, follow-ups em atraso e pontos por vendedor.
+- Prioridades: ordena por follow-up em atraso, Recompra, risco sem contato, inativo antigo sem acao e aguardando retorno.
+
+As regras de classificacao operacional seguem `docs/REGRAS_OPERACIONAIS_FENIE.md`: Convertido nos ultimos 30 dias tem prioridade e fica fora de Atencao, Risco, Inativo antigo e Recompra.
 
 ## Gamificacao
 

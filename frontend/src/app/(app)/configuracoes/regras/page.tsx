@@ -25,19 +25,19 @@ export default function RegrasPage() {
         <CardContent className="grid gap-3 md:grid-cols-4">
           <div className="rounded-md border p-3">
             <StatusBadge status="saudavel" />
-            <p className="mt-2 text-sm text-muted-foreground">0 a 30 dias sem comprar</p>
+            <p className="mt-2 text-sm text-muted-foreground">0 a 59 dias sem comprar</p>
           </div>
           <div className="rounded-md border p-3">
             <StatusBadge status="atencao" />
-            <p className="mt-2 text-sm text-muted-foreground">31 a 60 dias sem comprar</p>
+            <p className="mt-2 text-sm text-muted-foreground">60 a 89 dias sem comprar</p>
           </div>
           <div className="rounded-md border p-3">
             <StatusBadge status="risco" />
-            <p className="mt-2 text-sm text-muted-foreground">61 a 89 dias sem comprar</p>
+            <p className="mt-2 text-sm text-muted-foreground">90 a 179 dias sem comprar</p>
           </div>
           <div className="rounded-md border p-3">
             <StatusBadge status="inativo" />
-            <p className="mt-2 text-sm text-muted-foreground">90 dias ou mais</p>
+            <p className="mt-2 text-sm text-muted-foreground">180 dias ou mais</p>
           </div>
         </CardContent>
       </Card>

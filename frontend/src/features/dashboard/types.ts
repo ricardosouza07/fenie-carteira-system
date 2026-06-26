@@ -23,6 +23,9 @@ export type DashboardMetrics = {
   followUpsHoje: number;
   contatosRealizados: number;
   pontosMes: number;
+  clientesInadimplentes: number;
+  clientesBloqueados: number;
+  negociacoesFinanceiras: number;
 };
 
 export type DashboardSellerPerformance = {

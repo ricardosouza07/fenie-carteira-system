@@ -55,6 +55,18 @@ import {
   loadCarteiraFromSupabaseAction,
   saveInteractionToSupabaseAction,
 } from "./actions";
+import {
+  financialStatusFilterOptions,
+  getClientFinancialStatus,
+  normalizeFinancialStatus,
+} from "./financial-status";
+import {
+  getClientHealthLabel,
+  getOperationalClientLevel,
+  isClientConverted,
+  isClientInRecompra,
+  matchesOperationalLevel,
+} from "./operational-rules";
 import { InteractionDrawer } from "./interaction-drawer";
 import {
   buildPersistenceToast,
@@ -72,6 +84,7 @@ import type {
   ClientLevel,
   ContactChannel,
   ContactStatus,
+  FinancialStatus,
   WorkStatus,
 } from "./types";
 
@@ -87,10 +100,10 @@ type QuickFilter =
   | "inativos"
   | "nao_trabalhados"
   | "convertidos"
-  | "vencidos";
+  | "recompra";
 type NextPurchaseFilter =
   | "todas"
-  | "vencidas"
+  | "recompra"
   | "proximos_7"
   | "proximos_15"
   | "futuras"
@@ -103,10 +116,10 @@ type CarteiraSourceState = {
 
 const levelOptions: { value: "todas" | ClientLevel; label: string }[] = [
   { value: "todas", label: "Todas as classificações" },
-  { value: "saudavel", label: "Saudável" },
-  { value: "atencao", label: "Atenção" },
-  { value: "risco", label: "Risco" },
-  { value: "inativo", label: "Inativo" },
+  { value: "saudavel", label: getClientHealthLabel("saudavel") },
+  { value: "atencao", label: getClientHealthLabel("atencao") },
+  { value: "risco", label: getClientHealthLabel("risco") },
+  { value: "inativo", label: getClientHealthLabel("inativo") },
 ];
 
 const statusOptions: { value: "todos" | WorkStatus; label: string }[] = [
@@ -120,7 +133,7 @@ const statusOptions: { value: "todos" | WorkStatus; label: string }[] = [
 
 const nextPurchaseOptions: { value: NextPurchaseFilter; label: string }[] = [
   { value: "todas", label: "Todas as próximas compras" },
-  { value: "vencidas", label: "Vencidas" },
+  { value: "recompra", label: "Recompra" },
   { value: "proximos_7", label: "Próximos 7 dias" },
   { value: "proximos_15", label: "Próximos 15 dias" },
   { value: "futuras", label: "Futuras" },
@@ -131,10 +144,10 @@ const quickFilters: { value: QuickFilter; label: string }[] = [
   { value: "todos", label: "Todos" },
   { value: "atencao", label: "Atenção" },
   { value: "risco", label: "Risco" },
-  { value: "inativos", label: "Inativos" },
+  { value: "inativos", label: "Inativos antigos" },
   { value: "nao_trabalhados", label: "Não trabalhados" },
   { value: "convertidos", label: "Convertidos" },
-  { value: "vencidos", label: "Vencidos" },
+  { value: "recompra", label: "Recompra" },
 ];
 
 const levelValues: ClientLevel[] = ["saudavel", "atencao", "risco", "inativo"];
@@ -147,9 +160,16 @@ const statusValues: WorkStatus[] = [
   "visita",
 ];
 
+const financialStatusValues: FinancialStatus[] = [
+  "adimplente",
+  "inadimplente",
+  "bloqueado",
+  "negociacao",
+];
+
 const nextPurchaseValues: NextPurchaseFilter[] = [
   "todas",
-  "vencidas",
+  "recompra",
   "proximos_7",
   "proximos_15",
   "futuras",
@@ -163,7 +183,7 @@ const quickFilterValues: QuickFilter[] = [
   "inativos",
   "nao_trabalhados",
   "convertidos",
-  "vencidos",
+  "recompra",
 ];
 
 const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -212,13 +232,27 @@ function readStatusQuery(value: string | null): "todos" | WorkStatus {
     : "todos";
 }
 
+function readFinancialQuery(value: string | null): "todas" | FinancialStatus {
+  return value && financialStatusValues.includes(value as FinancialStatus)
+    ? normalizeFinancialStatus(value)
+    : "todas";
+}
+
 function readNextPurchaseQuery(value: string | null): NextPurchaseFilter {
+  if (value === "vencidas") {
+    return "recompra";
+  }
+
   return value && nextPurchaseValues.includes(value as NextPurchaseFilter)
     ? (value as NextPurchaseFilter)
     : "todas";
 }
 
 function readQuickFilterQuery(value: string | null): QuickFilter {
+  if (value === "vencidos") {
+    return "recompra";
+  }
+
   return value && quickFilterValues.includes(value as QuickFilter)
     ? (value as QuickFilter)
     : "todos";
@@ -257,12 +291,6 @@ function daysUntil(date: string | null) {
   return Math.round((target.getTime() - today.getTime()) / 86_400_000);
 }
 
-function isOverdue(date: string | null) {
-  const diff = daysUntil(date);
-
-  return diff !== null && diff < 0;
-}
-
 function phoneDigits(phone: string) {
   return phone.replace(/\D/g, "");
 }
@@ -289,8 +317,8 @@ function matchesNextPurchase(
     return false;
   }
 
-  if (filter === "vencidas") {
-    return diff < 0;
+  if (filter === "recompra") {
+    return isClientInRecompra(client, TODAY);
   }
 
   if (filter === "proximos_7") {
@@ -307,42 +335,55 @@ function matchesNextPurchase(
 function matchesQuickFilter(client: CarteiraClient, filter: QuickFilter) {
   switch (filter) {
     case "atencao":
-      return client.nivel === "atencao";
+      return matchesOperationalLevel(client, "atencao", TODAY);
     case "risco":
-      return client.nivel === "risco";
+      return matchesOperationalLevel(client, "risco", TODAY);
     case "inativos":
-      return client.nivel === "inativo";
+      return matchesOperationalLevel(client, "inativo", TODAY);
     case "nao_trabalhados":
       return client.status === "nao_trabalhado";
     case "convertidos":
-      return client.status === "convertido";
-    case "vencidos":
-      return isOverdue(client.proximaCompra);
+      return isClientConverted(client, TODAY);
+    case "recompra":
+      return isClientInRecompra(client, TODAY);
     default:
       return true;
   }
 }
 
-function getNextPurchaseLabel(date: string | null) {
-  const diff = daysUntil(date);
+function getNextPurchaseLabel(client: CarteiraClient) {
+  const diff = daysUntil(client.proximaCompra);
 
   if (diff === null) {
     return { label: "Sem previsão", tone: "muted" as const };
   }
 
+  if (isClientConverted(client, TODAY)) {
+    return { label: "Convertido", tone: "success" as const };
+  }
+
   if (diff < 0) {
-    return { label: `${formatDate(date)} - vencida`, tone: "danger" as const };
+    return {
+      label: `Recompra · ${formatDate(client.proximaCompra)}`,
+      tone: "danger" as const,
+    };
   }
 
   if (diff === 0) {
-    return { label: `${formatDate(date)} - hoje`, tone: "warning" as const };
+    return {
+      label: `${formatDate(client.proximaCompra)} - hoje`,
+      tone: "warning" as const,
+    };
   }
 
   if (diff <= 7) {
-    return { label: `${formatDate(date)} - ${diff}d`, tone: "warning" as const };
+    return {
+      label: `${formatDate(client.proximaCompra)} - ${diff}d`,
+      tone: "warning" as const,
+    };
   }
 
-  return { label: formatDate(date), tone: "outline" as const };
+  return { label: formatDate(client.proximaCompra), tone: "outline" as const };
 }
 
 function getRangeLabel(total: number, start: number, end: number) {
@@ -574,11 +615,16 @@ function CarteiraColumnCell({
   client: CarteiraClient;
   columnId: CarteiraColumnId;
 }) {
-  const nextPurchase = getNextPurchaseLabel(client.proximaCompra);
+  const nextPurchase = getNextPurchaseLabel(client);
+  const operationalLevel = getOperationalClientLevel(client, TODAY);
 
   switch (columnId) {
     case "nivel":
-      return <StatusBadge status={client.nivel} />;
+      return isClientConverted(client, TODAY) || !operationalLevel ? (
+        <StatusBadge status="convertido" />
+      ) : (
+        <StatusBadge status={operationalLevel} />
+      );
     case "cliente":
       return (
         <div className="min-w-0">
@@ -625,9 +671,8 @@ function CarteiraColumnCell({
         <span
           className={cn(
             "font-mono text-sm font-semibold",
-            client.diasSemComprar >= 90 && "text-danger-soft-foreground",
-            client.diasSemComprar >= 45 &&
-              client.diasSemComprar < 90 &&
+            operationalLevel === "risco" && "text-danger-soft-foreground",
+            operationalLevel === "atencao" &&
               "text-warning-foreground",
           )}
         >
@@ -653,6 +698,8 @@ function CarteiraColumnCell({
           {client.vendedor}
         </div>
       );
+    case "situacaoFinanceira":
+      return <StatusBadge status={getClientFinancialStatus(client)} />;
     case "status":
       return <StatusBadge status={client.status} />;
     case "ultimaAcao":
@@ -698,7 +745,8 @@ function CarteiraMobileList({
   return (
     <div className="space-y-2 md:hidden">
       {clients.map((client) => {
-        const nextPurchase = getNextPurchaseLabel(client.proximaCompra);
+        const nextPurchase = getNextPurchaseLabel(client);
+        const operationalLevel = getOperationalClientLevel(client, TODAY);
 
         return (
           <article
@@ -732,12 +780,21 @@ function CarteiraMobileList({
             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
               {visibleColumns.has("nivel") ? (
                 <MobileField label="Nível">
-                  <StatusBadge status={client.nivel} />
+                  {isClientConverted(client, TODAY) || !operationalLevel ? (
+                    <StatusBadge status="convertido" />
+                  ) : (
+                    <StatusBadge status={operationalLevel} />
+                  )}
                 </MobileField>
               ) : null}
               {visibleColumns.has("status") ? (
                 <MobileField label="Status">
                   <StatusBadge status={client.status} />
+                </MobileField>
+              ) : null}
+              {visibleColumns.has("situacaoFinanceira") ? (
+                <MobileField label="Financeiro">
+                  <StatusBadge status={getClientFinancialStatus(client)} />
                 </MobileField>
               ) : null}
               {visibleColumns.has("telefone") ? (
@@ -906,6 +963,9 @@ export function CarteiraView() {
   const [status, setStatus] = useState<"todos" | WorkStatus>(() =>
     readStatusQuery(searchParams.get("status")),
   );
+  const [financialStatus, setFinancialStatus] = useState<
+    "todas" | FinancialStatus
+  >(() => readFinancialQuery(searchParams.get("financeiro")));
   const [nextPurchase, setNextPurchase] =
     useState<NextPurchaseFilter>(() =>
       readNextPurchaseQuery(searchParams.get("proxima")),
@@ -1016,12 +1076,26 @@ export function CarteiraView() {
         (!normalizedSearch || haystack.includes(normalizedSearch)) &&
         (vendor === "todos" || client.vendedor === vendor) &&
         (city === "todas" || client.cidade === city) &&
-        (level === "todas" || client.nivel === level) &&
-        (status === "todos" || client.status === status) &&
+        (level === "todas" || matchesOperationalLevel(client, level, TODAY)) &&
+        (status === "todos" ||
+          (status === "convertido"
+            ? isClientConverted(client, TODAY)
+            : client.status === status)) &&
+        (financialStatus === "todas" ||
+          getClientFinancialStatus(client) === financialStatus) &&
         matchesNextPurchase(client, nextPurchase)
       );
     });
-  }, [city, clients, level, nextPurchase, search, status, vendor]);
+  }, [
+    city,
+    clients,
+    financialStatus,
+    level,
+    nextPurchase,
+    search,
+    status,
+    vendor,
+  ]);
 
   const quickCounts = useMemo(() => {
     return quickFilters.reduce<Record<QuickFilter, number>>(
@@ -1039,7 +1113,7 @@ export function CarteiraView() {
         inativos: 0,
         nao_trabalhados: 0,
         convertidos: 0,
-        vencidos: 0,
+        recompra: 0,
       },
     );
   }, [baseFilteredClients]);
@@ -1074,10 +1148,11 @@ export function CarteiraView() {
     () => ({
       total: clients.length,
       visible: sortedClients.length,
-      risk: clients.filter((client) => client.nivel === "risco").length,
-      overdue: clients.filter((client) =>
-        isOverdue(client.proximaCompra),
+      risk: clients.filter((client) =>
+        matchesOperationalLevel(client, "risco", TODAY),
       ).length,
+      recompra: clients.filter((client) => isClientInRecompra(client, TODAY))
+        .length,
     }),
     [clients, sortedClients.length],
   );
@@ -1100,6 +1175,7 @@ export function CarteiraView() {
     setCity("todas");
     setLevel("todas");
     setStatus("todos");
+    setFinancialStatus("todas");
     setNextPurchase("todas");
     setQuickFilter("todos");
     setSortKey("diasSemComprar");
@@ -1231,9 +1307,9 @@ export function CarteiraView() {
         </Card>
         <Card>
           <CardContent className="p-3">
-            <div className="text-xs text-muted-foreground">Compras vencidas</div>
+            <div className="text-xs text-muted-foreground">Recompra</div>
             <div className="mt-1 text-xl font-semibold text-warning-foreground">
-              {summary.overdue}
+              {summary.recompra}
             </div>
           </CardContent>
         </Card>
@@ -1284,6 +1360,15 @@ export function CarteiraView() {
               options={statusOptions}
               onChange={(value) => {
                 setStatus(value as "todos" | WorkStatus);
+                setCurrentPage(1);
+              }}
+            />
+            <SelectFilter
+              label="Situação financeira"
+              value={financialStatus}
+              options={financialStatusFilterOptions}
+              onChange={(value) => {
+                setFinancialStatus(value as "todas" | FinancialStatus);
                 setCurrentPage(1);
               }}
             />

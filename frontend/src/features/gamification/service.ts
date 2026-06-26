@@ -1,4 +1,5 @@
 import type { CarteiraClient } from "@/features/carteira/types";
+import { isClientOldInactive } from "@/features/carteira/operational-rules";
 import { getCurrentPeriod } from "@/lib/current-period";
 
 import type {
@@ -164,7 +165,7 @@ export function createPointEventId() {
 }
 
 function isOldInactive(client: CarteiraClient) {
-  return client.nivel === "inativo" && client.diasSemComprar >= 180;
+  return isClientOldInactive(client, TODAY);
 }
 
 function isFollowUpOnTime(client: CarteiraClient) {

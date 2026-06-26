@@ -3,11 +3,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthenticatedSupabaseClient } from "@/features/auth/access";
 import type {
   CarteiraClient,
-  ClientLevel,
   ContactChannel,
   ContactStatus,
   WorkStatus,
 } from "@/features/carteira/types";
+import { calculateClientHealthStatus } from "@/features/carteira/operational-rules";
+import { normalizeFinancialStatus } from "@/features/carteira/financial-status";
 import { getCurrentPeriod } from "@/lib/current-period";
 
 import type {
@@ -214,15 +215,6 @@ function workStatus(value: unknown): WorkStatus {
     : "nao_trabalhado";
 }
 
-function healthStatus(value: unknown): ClientLevel {
-  return value === "saudavel" ||
-    value === "atencao" ||
-    value === "risco" ||
-    value === "inativo"
-    ? value
-    : "saudavel";
-}
-
 function channel(value: unknown): ContactChannel {
   return value === "whatsapp" ||
     value === "telefone" ||
@@ -289,34 +281,50 @@ function normalizeClient(input: {
   const latestDate = dateOnly(
     latestInteraction?.interaction_at ?? latestInteraction?.created_at,
   );
+  const diasSemComprar = integerOrZero(
+    item.days_without_buying ?? customer.days_without_buying,
+  );
 
   return {
     id: String(customer.id),
     portfolioItemId: stringOrNull(item.id) ?? undefined,
     vendedorId: stringOrNull(item.salesperson_id) ?? undefined,
-    nivel: healthStatus(item.health_status ?? customer.health_status),
+    nivel: calculateClientHealthStatus(diasSemComprar),
     cliente: nomeFantasia ?? razaoSocial ?? "Cliente sem nome",
     razaoSocial: razaoSocial ?? undefined,
     nomeFantasia: nomeFantasia ?? undefined,
+    documento: stringOrNull(customer.document) ?? undefined,
+    inscricaoEstadual: stringOrNull(customer.state_registration) ?? undefined,
     email: pickEmail(customer, contacts),
     telefone: pickPhone(customer, contacts),
     cidade: stringOrNull(customer.city) ?? "-",
     bairro: stringOrNull(customer.district) ?? "-",
     endereco: stringOrNull(customer.address) ?? undefined,
-    diasSemComprar: integerOrZero(
-      item.days_without_buying ?? customer.days_without_buying,
-    ),
+    diasSemComprar,
     cicloMedioCompraDias:
       typeof customer.average_purchase_cycle_days === "number"
         ? customer.average_purchase_cycle_days
         : undefined,
     proximaCompra: dateOnly(item.next_purchase_date ?? customer.next_purchase_date),
+    ultimoPedidoNumero: stringOrNull(customer.last_order_number) ?? undefined,
     ultimoPedido: dateOnly(item.last_order_date ?? customer.last_order_date),
     valorUltimoPedido: numberOrZero(customer.last_order_value),
     vendedor,
     vendedorUltimoPedido:
       stringOrNull(customer.last_order_salesperson_name) ?? vendedor,
-    situacaoOriginal: stringOrNull(customer.original_situation) ?? undefined,
+    situacaoOriginal:
+      stringOrNull(customer.mercos_situation) ??
+      stringOrNull(customer.original_situation) ??
+      undefined,
+    dataCadastro: dateOnly(customer.registration_date),
+    origemCadastro: stringOrNull(customer.registration_origin) ?? undefined,
+    acessoB2B: stringOrNull(customer.b2b_access) ?? undefined,
+    segmento: stringOrNull(customer.segment) ?? undefined,
+    tagsCliente: stringOrNull(customer.customer_tags) ?? undefined,
+    proximaTarefa: stringOrNull(customer.next_task) ?? undefined,
+    dataTarefa: dateOnly(customer.task_date),
+    situacaoFinanceira: normalizeFinancialStatus(customer.financial_status),
+    observacaoFinanceira: stringOrNull(customer.financial_note),
     status: latestStatus ?? workStatus(item.work_status ?? customer.work_status),
     ultimaAcao: latestInteraction
       ? {
@@ -354,7 +362,7 @@ function followUpStatus(value: unknown): FollowUpRow["status"] {
   }
 
   if (value === "vencido") {
-    return "Vencido";
+    return "Em atraso";
   }
 
   return "Aberto";
@@ -461,8 +469,8 @@ function mapFollowUpRows(
         status: storedStatus,
         motivo: followUpReason(followUp),
         situacao:
-          storedStatus === "Vencido" || isOverdue(prazo)
-            ? "Vencido"
+          storedStatus === "Em atraso" || isOverdue(prazo)
+            ? "Em atraso"
             : "No prazo",
       },
     ];

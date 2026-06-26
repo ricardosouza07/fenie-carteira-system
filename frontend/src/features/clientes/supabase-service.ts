@@ -4,11 +4,13 @@ import { getAuthenticatedSupabaseClient } from "@/features/auth/access";
 import type {
   CarteiraClient,
   CarteiraInteraction,
-  ClientLevel,
   ContactChannel,
   ContactStatus,
+  FinancialStatus,
   WorkStatus,
 } from "@/features/carteira/types";
+import { calculateClientHealthStatus } from "@/features/carteira/operational-rules";
+import { normalizeFinancialStatus } from "@/features/carteira/financial-status";
 import { getCurrentPeriod } from "@/lib/current-period";
 
 import type {
@@ -95,15 +97,6 @@ function dateOnly(value: unknown) {
 
 function asRows(value: unknown): Row[] {
   return Array.isArray(value) ? (value as Row[]) : [];
-}
-
-function healthStatus(value: unknown): ClientLevel {
-  return value === "saudavel" ||
-    value === "atencao" ||
-    value === "risco" ||
-    value === "inativo"
-    ? value
-    : "saudavel";
 }
 
 function workStatus(value: unknown): WorkStatus {
@@ -237,6 +230,9 @@ function normalizeClient(input: {
     stringOrNull(salesperson?.name) ??
     stringOrNull(customer.last_order_salesperson_name) ??
     "Sem vendedor";
+  const diasSemComprar = integerOrZero(
+    item?.days_without_buying ?? customer.days_without_buying,
+  );
 
   return {
     id: String(customer.id),
@@ -245,29 +241,42 @@ function normalizeClient(input: {
       stringOrNull(item?.salesperson_id) ??
       stringOrNull(customer.assigned_salesperson_id) ??
       undefined,
-    nivel: healthStatus(item?.health_status ?? customer.health_status),
+    nivel: calculateClientHealthStatus(diasSemComprar),
     cliente: nomeFantasia ?? razaoSocial ?? "Cliente sem nome",
     razaoSocial: razaoSocial ?? undefined,
     nomeFantasia: nomeFantasia ?? undefined,
+    documento: stringOrNull(customer.document) ?? undefined,
+    inscricaoEstadual: stringOrNull(customer.state_registration) ?? undefined,
     email: pickEmail(customer, contacts),
     telefone: pickPhone(customer, contacts),
     cidade: stringOrNull(customer.city) ?? "-",
     bairro: stringOrNull(customer.district) ?? "-",
     endereco: stringOrNull(customer.address) ?? undefined,
-    diasSemComprar: integerOrZero(
-      item?.days_without_buying ?? customer.days_without_buying,
-    ),
+    diasSemComprar,
     cicloMedioCompraDias:
       typeof customer.average_purchase_cycle_days === "number"
         ? customer.average_purchase_cycle_days
         : undefined,
     proximaCompra: dateOnly(item?.next_purchase_date ?? customer.next_purchase_date),
+    ultimoPedidoNumero: stringOrNull(customer.last_order_number) ?? undefined,
     ultimoPedido: dateOnly(item?.last_order_date ?? customer.last_order_date),
     valorUltimoPedido: numberOrZero(customer.last_order_value),
     vendedor,
     vendedorUltimoPedido:
       stringOrNull(customer.last_order_salesperson_name) ?? vendedor,
-    situacaoOriginal: stringOrNull(customer.original_situation) ?? undefined,
+    situacaoOriginal:
+      stringOrNull(customer.mercos_situation) ??
+      stringOrNull(customer.original_situation) ??
+      undefined,
+    dataCadastro: dateOnly(customer.registration_date),
+    origemCadastro: stringOrNull(customer.registration_origin) ?? undefined,
+    acessoB2B: stringOrNull(customer.b2b_access) ?? undefined,
+    segmento: stringOrNull(customer.segment) ?? undefined,
+    tagsCliente: stringOrNull(customer.customer_tags) ?? undefined,
+    proximaTarefa: stringOrNull(customer.next_task) ?? undefined,
+    dataTarefa: dateOnly(customer.task_date),
+    situacaoFinanceira: normalizeFinancialStatus(customer.financial_status),
+    observacaoFinanceira: stringOrNull(customer.financial_note),
     status:
       interaction?.status ?? workStatus(item?.work_status ?? customer.work_status),
     ultimaAcao: buildLastAction(customer, latestInteraction),
@@ -450,6 +459,75 @@ export async function loadClienteDetailFromSupabase(
         error instanceof Error
           ? error.message
           : "Não foi possível carregar o detalhe do cliente no Supabase.",
+    };
+  }
+}
+
+export type UpdateClienteFinancialStatusResult =
+  | {
+      status: "success";
+      situacaoFinanceira: FinancialStatus;
+      observacaoFinanceira: string | null;
+      message?: string;
+    }
+  | {
+      status: "local_fallback" | "error";
+      message: string;
+    };
+
+export async function updateClienteFinancialStatus(input: {
+  customerId: string;
+  situacaoFinanceira: FinancialStatus;
+  observacaoFinanceira: string | null;
+}): Promise<UpdateClienteFinancialStatusResult> {
+  const access = await getAuthenticatedSupabaseClient();
+  const client = access.client as SupabaseServiceClient | null;
+
+  if (!client) {
+    return {
+      status: "local_fallback",
+      message:
+        access.message ??
+        "Supabase ainda não está configurado. A situação financeira foi mantida apenas localmente.",
+    };
+  }
+
+  if (!isUuid(input.customerId)) {
+    return {
+      status: "local_fallback",
+      message:
+        "Este cliente ainda não possui ID real do Supabase. A situação financeira foi mantida apenas localmente.",
+    };
+  }
+
+  try {
+    const status = normalizeFinancialStatus(input.situacaoFinanceira);
+    const note = stringOrNull(input.observacaoFinanceira);
+
+    await expectNoError(
+      client
+        .from("customers")
+        .update({
+          financial_status: status,
+          financial_note: note,
+        })
+        .eq("id", input.customerId),
+      "Não foi possível atualizar a situação financeira do cliente",
+    );
+
+    return {
+      status: "success",
+      situacaoFinanceira: status,
+      observacaoFinanceira: note,
+      message: "Situação financeira atualizada.",
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar a situação financeira.",
     };
   }
 }

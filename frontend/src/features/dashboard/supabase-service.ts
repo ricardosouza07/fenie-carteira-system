@@ -8,7 +8,6 @@ import {
 import type {
   CarteiraClient,
   CarteiraInteraction,
-  ClientLevel,
   ContactChannel,
   ContactStatus,
   WorkStatus,
@@ -27,6 +26,17 @@ import type {
   PointEventOrigin,
 } from "@/features/gamification/types";
 import { getCurrentPeriod } from "@/lib/current-period";
+import {
+  calculateClientHealthStatus,
+  isClientConverted,
+  isClientInRecompra,
+  isClientOldInactive,
+  matchesOperationalLevel,
+} from "@/features/carteira/operational-rules";
+import {
+  getClientFinancialStatus,
+  normalizeFinancialStatus,
+} from "@/features/carteira/financial-status";
 
 import type {
   DashboardMetrics,
@@ -191,15 +201,6 @@ function workStatus(value: unknown): WorkStatus {
     : "nao_trabalhado";
 }
 
-function healthStatus(value: unknown): ClientLevel {
-  return value === "saudavel" ||
-    value === "atencao" ||
-    value === "risco" ||
-    value === "inativo"
-    ? value
-    : "saudavel";
-}
-
 function channel(value: unknown): ContactChannel {
   return value === "whatsapp" ||
     value === "telefone" ||
@@ -341,34 +342,50 @@ function normalizeClient(input: {
     "Sem vendedor";
   const nomeFantasia = stringOrNull(customer.trade_name);
   const razaoSocial = stringOrNull(customer.legal_name);
+  const diasSemComprar = integerOrZero(
+    item.days_without_buying ?? customer.days_without_buying,
+  );
 
   return {
     id: String(customer.id),
     portfolioItemId: stringOrNull(item.id) ?? undefined,
     vendedorId: stringOrNull(item.salesperson_id) ?? undefined,
-    nivel: healthStatus(item.health_status ?? customer.health_status),
+    nivel: calculateClientHealthStatus(diasSemComprar),
     cliente: nomeFantasia ?? razaoSocial ?? "Cliente sem nome",
     razaoSocial: razaoSocial ?? undefined,
     nomeFantasia: nomeFantasia ?? undefined,
+    documento: stringOrNull(customer.document) ?? undefined,
+    inscricaoEstadual: stringOrNull(customer.state_registration) ?? undefined,
     email: pickEmail(customer, contacts),
     telefone: pickPhone(customer, contacts),
     cidade: stringOrNull(customer.city) ?? "-",
     bairro: stringOrNull(customer.district) ?? "-",
     endereco: stringOrNull(customer.address) ?? undefined,
-    diasSemComprar: integerOrZero(
-      item.days_without_buying ?? customer.days_without_buying,
-    ),
+    diasSemComprar,
     cicloMedioCompraDias:
       typeof customer.average_purchase_cycle_days === "number"
         ? customer.average_purchase_cycle_days
         : undefined,
     proximaCompra: dateOnly(item.next_purchase_date ?? customer.next_purchase_date),
+    ultimoPedidoNumero: stringOrNull(customer.last_order_number) ?? undefined,
     ultimoPedido: dateOnly(item.last_order_date ?? customer.last_order_date),
     valorUltimoPedido: numberOrZero(customer.last_order_value),
     vendedor,
     vendedorUltimoPedido:
       stringOrNull(customer.last_order_salesperson_name) ?? vendedor,
-    situacaoOriginal: stringOrNull(customer.original_situation) ?? undefined,
+    situacaoOriginal:
+      stringOrNull(customer.mercos_situation) ??
+      stringOrNull(customer.original_situation) ??
+      undefined,
+    dataCadastro: dateOnly(customer.registration_date),
+    origemCadastro: stringOrNull(customer.registration_origin) ?? undefined,
+    acessoB2B: stringOrNull(customer.b2b_access) ?? undefined,
+    segmento: stringOrNull(customer.segment) ?? undefined,
+    tagsCliente: stringOrNull(customer.customer_tags) ?? undefined,
+    proximaTarefa: stringOrNull(customer.next_task) ?? undefined,
+    dataTarefa: dateOnly(customer.task_date),
+    situacaoFinanceira: normalizeFinancialStatus(customer.financial_status),
+    observacaoFinanceira: stringOrNull(customer.financial_note),
     status: interaction?.status ?? workStatus(item.work_status ?? customer.work_status),
     ultimaAcao: buildLastAction(customer, latestInteraction, nextFollowUp),
     interacoes: interaction ? [interaction] : undefined,
@@ -386,14 +403,6 @@ function monthRange(month: string, year: string) {
     startDate: start.toISOString().slice(0, 10),
     endDate: new Date(end.getTime() - 86400000).toISOString().slice(0, 10),
   };
-}
-
-function isOldInactive(client: CarteiraClient) {
-  return client.nivel === "inativo" && client.diasSemComprar >= 180;
-}
-
-function isOverdue(date: string | null) {
-  return Boolean(date && date < TODAY);
 }
 
 function isFollowUpOpen(row: Row) {
@@ -484,11 +493,12 @@ function buildSellerRows(input: {
     const current = getAccumulator(key.id, key.name);
 
     if (
-      client.status === "aguardando" ||
-      client.status === "visita" ||
-      client.status === "nao_trabalhado" ||
-      client.nivel === "risco" ||
-      isOverdue(client.proximaCompra)
+      !isClientConverted(client, TODAY) &&
+      (client.status === "aguardando" ||
+        client.status === "visita" ||
+        client.status === "nao_trabalhado" ||
+        matchesOperationalLevel(client, "risco", TODAY) ||
+        isClientInRecompra(client, TODAY))
     ) {
       current.pendencias += 1;
     }
@@ -590,10 +600,18 @@ function buildMetrics(input: {
 
   return {
     totalClientes: clients.length,
-    saudaveis: clients.filter((client) => client.nivel === "saudavel").length,
-    atencao: clients.filter((client) => client.nivel === "atencao").length,
-    risco: clients.filter((client) => client.nivel === "risco").length,
-    inativosAntigos: clients.filter(isOldInactive).length,
+    saudaveis: clients.filter((client) =>
+      matchesOperationalLevel(client, "saudavel", TODAY),
+    ).length,
+    atencao: clients.filter((client) =>
+      matchesOperationalLevel(client, "atencao", TODAY),
+    ).length,
+    risco: clients.filter((client) =>
+      matchesOperationalLevel(client, "risco", TODAY),
+    ).length,
+    inativosAntigos: clients.filter((client) =>
+      isClientOldInactive(client, TODAY),
+    ).length,
     trabalhadosMes: uniqueCount(
       interactions.map((interaction) => stringOrNull(interaction.customer_id)),
     ),
@@ -625,6 +643,15 @@ function buildMetrics(input: {
       (total, event) => total + integerOrZero(event.points),
       0,
     ),
+    clientesInadimplentes: clients.filter(
+      (client) => getClientFinancialStatus(client) === "inadimplente",
+    ).length,
+    clientesBloqueados: clients.filter(
+      (client) => getClientFinancialStatus(client) === "bloqueado",
+    ).length,
+    negociacoesFinanceiras: clients.filter(
+      (client) => getClientFinancialStatus(client) === "negociacao",
+    ).length,
   };
 }
 
@@ -643,22 +670,29 @@ function buildPriorityRows(input: {
       const hasCurrentMonthInteraction = interactionsByCustomer.has(client.id);
       const hasOverdueFollowUp = followUps.some(isFollowUpOverdue);
 
+      if (isClientConverted(client, TODAY)) {
+        return null;
+      }
+
       if (hasOverdueFollowUp) {
-        motives.push("Follow-up vencido");
+        motives.push("Follow-up em atraso");
         score += 700;
       }
 
-      if (isOverdue(client.proximaCompra)) {
-        motives.push("Proxima compra vencida");
+      if (isClientInRecompra(client, TODAY)) {
+        motives.push("Recompra");
         score += 520;
       }
 
-      if (client.nivel === "risco" && !hasCurrentMonthInteraction) {
+      if (
+        matchesOperationalLevel(client, "risco", TODAY) &&
+        !hasCurrentMonthInteraction
+      ) {
         motives.push("Risco sem contato");
         score += 420;
       }
 
-      if (isOldInactive(client) && !hasCurrentMonthInteraction) {
+      if (isClientOldInactive(client, TODAY) && !hasCurrentMonthInteraction) {
         motives.push("Inativo antigo sem acao");
         score += 360;
       }

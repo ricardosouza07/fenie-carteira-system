@@ -21,7 +21,7 @@ Decisão visual:
 - Texto escuro e hierarquia tipográfica contida.
 - Verde para saudável/convertido.
 - Amarelo para atenção.
-- Vermelho para risco/vencido.
+- Vermelho para risco, Recompra e follow-up em atraso.
 - Cinza para inativo/não trabalhado.
 - Roxo ou vinho discreto como cor institucional de ação, se desejado.
 
@@ -143,7 +143,7 @@ Vendedor externo:
 - Notebook: fixa, compacta o suficiente para não roubar área da tabela.
 - Mobile: abre por botão de menu.
 - Item ativo com barra lateral ou fundo suave.
-- Badges pequenos para pendências: agenda vencida, follow-ups de hoje, importações com erro.
+- Badges pequenos para pendências: Recompra, follow-ups de hoje, importações com erro.
 
 ## 4. Fluxo de navegação
 
@@ -163,7 +163,7 @@ Login
 
 ```text
 Carteira
-  -> Filtrar por Risco / Inativo / Próxima compra vencida
+  -> Filtrar por Risco / Inativo antigo / Recompra
   -> Ordenar por Dias sem comprar
   -> Abrir cliente ou ação rápida
   -> Registrar contato
@@ -269,7 +269,7 @@ Regras de interface:
 - `MetricCard`: número principal, variação e link para detalhe.
 - `ProgressBar`: meta realizada.
 - `StatusBadge`: saudável, atenção, risco, inativo, convertido etc.
-- `PriorityBadge`: vencido, hoje, futuro.
+- `PriorityBadge`: Recompra, hoje, futuro.
 
 ### 6.4 Operação comercial
 
@@ -338,7 +338,7 @@ Informações:
 - Não trabalhados.
 - Convertidos.
 - Valor recuperado.
-- Follow-ups vencidos.
+- Follow-ups em atraso.
 - Meta mensal.
 - Performance por vendedor.
 - Lista de prioridades.
@@ -358,7 +358,7 @@ Linha 1 - KPIs
   Total clientes | Em risco | Inativos | Convertidos | Valor recuperado
 
 Linha 2 - Operação do dia
-  Follow-ups vencidos | Follow-ups hoje | Não trabalhados | Aguardando retorno
+  Follow-ups em atraso | Follow-ups hoje | Não trabalhados | Aguardando retorno
 
 Linha 3
   Gráfico: evolução do mês / meta
@@ -375,7 +375,7 @@ Linha 5
 
 Hierarquia:
 
-1. Alertas vencidos e risco.
+1. Alertas de Recompra, follow-ups em atraso e risco.
 2. Conversões e valor recuperado.
 3. Meta.
 4. Distribuição da carteira.
@@ -384,7 +384,7 @@ Hierarquia:
 Comportamento:
 
 - Clicar em "Em risco" abre Carteira filtrada por risco.
-- Clicar em "Follow-ups vencidos" abre Minha agenda filtrada.
+- Clicar em "Follow-ups em atraso" abre Minha agenda filtrada.
 - Clicar em vendedor abre Carteira filtrada por vendedor.
 
 ### 7.3 Minha agenda
@@ -395,7 +395,7 @@ Objetivo:
 
 Informações:
 
-- Follow-ups vencidos.
+- Follow-ups em atraso.
 - Follow-ups de hoje.
 - Próximas compras previstas hoje.
 - Clientes aguardando retorno.
@@ -409,11 +409,11 @@ Header
   Ação: Novo follow-up
 
 Filtros rápidos
-  Hoje | Vencidos | Semana | Todos
+  Hoje | Recompra | Semana | Todos
 
 Coluna principal
   Lista agrupada por prazo
-    Vencidos
+    Recompra
     Hoje
     Próximos 7 dias
 
@@ -464,7 +464,7 @@ Filtros principais
   Próxima compra
 
 Filtros rápidos
-  Todos | Atenção | Risco | Inativos | Não trabalhados | Convertidos | Vencidos
+  Todos | Atenção | Risco | Inativos antigos | Não trabalhados | Convertidos | Recompra
 
 Tabela
   Nível
@@ -625,7 +625,7 @@ Informações:
 - Calendário mensal.
 - Quantidade de tarefas por dia.
 - Lista lateral do dia selecionado.
-- Legenda: próxima compra, follow-up manual, visita, vencido, convertido.
+- Legenda: próxima compra, follow-up manual, visita, Recompra, convertido.
 
 Estrutura visual:
 
@@ -724,7 +724,7 @@ Informações:
 - Total trabalhado.
 - Convertidos.
 - Valor recuperado.
-- Follow-ups vencidos.
+- Follow-ups em atraso.
 - Tabela detalhada.
 
 Estrutura visual:
@@ -895,7 +895,7 @@ Bloco 1: filtros
 
 Bloco 2: alertas operacionais
 
-- Follow-ups vencidos.
+- Follow-ups em atraso.
 - Clientes em risco sem contato.
 - Inativos antigos sem ação.
 - Aguardando retorno.
@@ -927,12 +927,12 @@ Bloco 6: performance por vendedor
 - Contatos.
 - Conversões.
 - Valor recuperado.
-- Follow-ups vencidos.
+- Follow-ups em atraso.
 
 Bloco 7: tabela de prioridades
 
 - Clientes em risco.
-- Clientes com próxima compra vencida.
+- Clientes em Recompra.
 - Clientes aguardando retorno.
 
 ### 8.3 Wireframe do dashboard
@@ -944,7 +944,7 @@ Bloco 7: tabela de prioridades
 ├──────────────────────────────────────────────────────────────┤
 │ Filtros: [Maio] [2026] [Todos vendedores] [Todas cidades]    │
 ├──────────────┬──────────────┬──────────────┬────────────────┤
-│ Vencidos     │ Em risco     │ Convertidos  │ Valor recuper. │
+│ Recompra     │ Em risco     │ Convertidos  │ Valor recuper. │
 │ 18           │ 61           │ 24           │ R$ 12.450,00   │
 ├──────────────┴──────────────┴──────────────┴────────────────┤
 │ Evolução do mês                              Meta do mês     │
@@ -1043,11 +1043,11 @@ Bloco 7: tabela de prioridades
 ┌──────────────────────────────────────────────────────────────┐
 │ Minha agenda                              Novo follow-up     │
 ├──────────────────────────────────────────────────────────────┤
-│ [Hoje] [Vencidos] [Semana] [Todos]                           │
+│ [Hoje] [Recompra] [Semana] [Todos]                            │
 ├─────────────────────────────────────┬────────────────────────┤
-│ Vencidos                            │ Resumo do dia          │
+│ Recompra                            │ Resumo do dia          │
 │ Cliente A · retorno pendente        │ 12 pendências          │
-│ Cliente B · próxima compra vencida  │ 4 contatos feitos      │
+│ Cliente B · Recompra                │ 4 contatos feitos      │
 │                                     │ 1 conversão            │
 │ Hoje                                │                        │
 │ Cliente C · ligar às 14h            │                        │
@@ -1172,4 +1172,3 @@ Prioridade de construção visual:
 6. Importações.
 7. Relatórios.
 8. Configurações.
-

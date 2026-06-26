@@ -1,7 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getAuthenticatedSupabaseClient } from "@/features/auth/access";
+import { calculateClientHealthStatus } from "@/features/carteira/operational-rules";
 
+import { normalizeFinancialStatus } from "./financial-status";
 import type {
   LoadCarteiraSupabaseResult,
   CarteiraSupabaseImportInfo,
@@ -9,7 +11,6 @@ import type {
 import type {
   CarteiraClient,
   CarteiraInteraction,
-  ClientLevel,
   ContactChannel,
   ContactStatus,
   WorkStatus,
@@ -159,15 +160,6 @@ function workStatus(value: unknown): WorkStatus {
     : "nao_trabalhado";
 }
 
-function healthStatus(value: unknown): ClientLevel {
-  return value === "saudavel" ||
-    value === "atencao" ||
-    value === "risco" ||
-    value === "inativo"
-    ? value
-    : "saudavel";
-}
-
 function channel(value: unknown): ContactChannel {
   return value === "whatsapp" ||
     value === "telefone" ||
@@ -308,35 +300,51 @@ function normalizeClient(input: {
     "Sem vendedor";
   const nomeFantasia = stringOrNull(customer.trade_name);
   const razaoSocial = stringOrNull(customer.legal_name);
+  const diasSemComprar = integerOrZero(
+    item.days_without_buying ?? customer.days_without_buying,
+  );
 
   return {
     id: String(customer.id),
     portfolioItemId: stringOrNull(item.id) ?? undefined,
     vendedorId: stringOrNull(item.salesperson_id) ?? undefined,
-    nivel: healthStatus(item.health_status ?? customer.health_status),
+    nivel: calculateClientHealthStatus(diasSemComprar),
     cliente: nomeFantasia ?? razaoSocial ?? "Cliente sem nome",
     razaoSocial: razaoSocial ?? undefined,
     nomeFantasia: nomeFantasia ?? undefined,
+    documento: stringOrNull(customer.document) ?? undefined,
+    inscricaoEstadual: stringOrNull(customer.state_registration) ?? undefined,
     email: pickEmail(customer, contacts),
     telefone: pickPhone(customer, contacts),
     cidade: stringOrNull(customer.city) ?? "-",
     bairro: stringOrNull(customer.district) ?? "-",
     cep: stringOrNull(customer.zip_code) ?? undefined,
     endereco: stringOrNull(customer.address) ?? undefined,
-    diasSemComprar: integerOrZero(
-      item.days_without_buying ?? customer.days_without_buying,
-    ),
+    diasSemComprar,
     cicloMedioCompraDias:
       typeof customer.average_purchase_cycle_days === "number"
         ? customer.average_purchase_cycle_days
         : undefined,
     proximaCompra: dateOnly(item.next_purchase_date ?? customer.next_purchase_date),
+    ultimoPedidoNumero: stringOrNull(customer.last_order_number) ?? undefined,
     ultimoPedido: dateOnly(item.last_order_date ?? customer.last_order_date),
     valorUltimoPedido: numberOrZero(customer.last_order_value),
     vendedor,
     vendedorUltimoPedido:
       stringOrNull(customer.last_order_salesperson_name) ?? vendedor,
-    situacaoOriginal: stringOrNull(customer.original_situation) ?? undefined,
+    situacaoOriginal:
+      stringOrNull(customer.mercos_situation) ??
+      stringOrNull(customer.original_situation) ??
+      undefined,
+    dataCadastro: dateOnly(customer.registration_date),
+    origemCadastro: stringOrNull(customer.registration_origin) ?? undefined,
+    acessoB2B: stringOrNull(customer.b2b_access) ?? undefined,
+    segmento: stringOrNull(customer.segment) ?? undefined,
+    tagsCliente: stringOrNull(customer.customer_tags) ?? undefined,
+    proximaTarefa: stringOrNull(customer.next_task) ?? undefined,
+    dataTarefa: dateOnly(customer.task_date),
+    situacaoFinanceira: normalizeFinancialStatus(customer.financial_status),
+    observacaoFinanceira: stringOrNull(customer.financial_note),
     status: interaction?.status ?? workStatus(item.work_status ?? customer.work_status),
     ultimaAcao: buildLastAction(customer, latestInteraction, nextFollowUp),
     interacoes: interaction ? [interaction] : undefined,

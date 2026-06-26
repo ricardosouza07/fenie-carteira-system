@@ -38,7 +38,13 @@ function normalizeText(value: string) {
 }
 
 function normalizePhone(value: string) {
-  return value.replace(/\D/g, "");
+  let digits = value.replace(/\D/g, "");
+
+  if (digits.startsWith("55") && digits.length > 11) {
+    digits = digits.slice(2);
+  }
+
+  return digits;
 }
 
 function nonEmpty(value: string) {
@@ -200,14 +206,30 @@ async function findCustomerId(
   client: SupabaseServiceClient,
   row: ImportPreviewRow,
 ) {
-  const phone = normalizePhone(row.telefone);
+  const phones =
+    row.telefonesNormalizados.length > 0
+      ? row.telefonesNormalizados
+      : [normalizePhone(row.telefone)].filter((phone) => phone.length >= 8);
 
-  if (phone.length >= 8) {
+  if (phones.length > 0) {
+    const contacts = await expectNoError(
+      client
+        .from("customer_contacts")
+        .select("customer_id")
+        .in("value_normalized", phones)
+        .limit(1),
+      `Nao foi possivel consultar cliente por contato da linha ${row.rowNumber}`,
+    );
+
+    if (contacts[0]?.customer_id) {
+      return String(contacts[0].customer_id);
+    }
+
     const data = await expectNoError(
       client
         .from("customers")
         .select("id")
-        .eq("phone_normalized", phone)
+        .in("phone_normalized", phones)
         .limit(1),
       `Nao foi possivel consultar cliente pelo telefone da linha ${row.rowNumber}`,
     );
@@ -219,30 +241,53 @@ async function findCustomerId(
     }
   }
 
-  const tradeName = nonEmpty(row.nomeFantasia || row.razaoSocial);
+  if (row.documentoNormalizado.length >= 11) {
+    const data = await expectNoError(
+      client
+        .from("customers")
+        .select("id")
+        .eq("document_normalized", row.documentoNormalizado)
+        .limit(1),
+      `Nao foi possivel consultar cliente pelo documento da linha ${row.rowNumber}`,
+    );
 
-  if (!tradeName) {
-    return null;
+    if (data[0]?.id) {
+      return String(data[0].id);
+    }
   }
 
-  let query = client
-    .from("customers")
-    .select("id")
-    .or(`trade_name.eq.${tradeName},legal_name.eq.${tradeName}`)
-    .limit(1);
+  if (row.razaoSocialNormalizada) {
+    const data = await expectNoError(
+      client
+        .from("customers")
+        .select("id")
+        .eq("legal_name_normalized", row.razaoSocialNormalizada)
+        .limit(1),
+      `Nao foi possivel consultar cliente pela razao social da linha ${row.rowNumber}`,
+    );
 
-  const city = nonEmpty(row.cidade);
-
-  if (city) {
-    query = query.eq("city", city);
+    if (data[0]?.id) {
+      return String(data[0].id);
+    }
   }
 
-  const data = await expectNoError(
-    query,
-    `Nao foi possivel consultar cliente pelo nome da linha ${row.rowNumber}`,
-  );
+  if (row.nomeFantasiaNormalizado && row.cidadeNormalizada) {
+    const data = await expectNoError(
+      client
+        .from("customers")
+        .select("id")
+        .eq("trade_name_normalized", row.nomeFantasiaNormalizado)
+        .eq("city_normalized", row.cidadeNormalizada)
+        .limit(1),
+      `Nao foi possivel consultar cliente pelo nome fantasia/cidade da linha ${row.rowNumber}`,
+    );
 
-  return data[0]?.id ? String(data[0].id) : null;
+    if (data[0]?.id) {
+      return String(data[0].id);
+    }
+  }
+
+  return null;
 }
 
 async function upsertCustomer(
@@ -255,14 +300,21 @@ async function upsertCustomer(
   const customerPayload = {
     legal_name: nonEmpty(row.razaoSocial),
     trade_name: nonEmpty(row.nomeFantasia || row.cliente),
+    legal_name_normalized: nonEmpty(row.razaoSocialNormalizada),
+    trade_name_normalized: nonEmpty(row.nomeFantasiaNormalizado),
+    document: nonEmpty(row.documento),
+    document_normalized: nonEmpty(row.documentoNormalizado),
+    state_registration: nonEmpty(row.inscricaoEstadual),
     email: nonEmpty(row.email),
     phone_primary: nonEmpty(row.telefone),
     city: nonEmpty(row.cidade),
+    city_normalized: nonEmpty(row.cidadeNormalizada),
     state: nonEmpty(row.estado),
     district: nonEmpty(row.bairro),
     zip_code: nonEmpty(row.cep),
     address: nonEmpty(row.endereco),
     assigned_salesperson_id: salesperson?.id ?? null,
+    last_order_number: nonEmpty(row.ultimoPedidoNumero),
     last_order_salesperson_name: salesperson?.name ?? nonEmpty(row.vendedor),
     last_order_date: row.ultimoPedido,
     last_order_value: row.valorUltimoPedido,
@@ -270,9 +322,15 @@ async function upsertCustomer(
     average_purchase_cycle_days: row.cicloMedioCompraDias,
     next_purchase_date: row.proximaCompra,
     original_situation: nonEmpty(row.situacao),
+    mercos_situation: nonEmpty(row.situacao),
+    registration_date: row.dataCadastro,
+    registration_origin: nonEmpty(row.origemCadastro),
+    b2b_access: nonEmpty(row.acessoB2B),
+    segment: nonEmpty(row.segmento),
+    customer_tags: nonEmpty(row.tagsCliente),
+    next_task: nonEmpty(row.proximaTarefa),
+    task_date: row.dataTarefa,
     health_status: row.nivel,
-    work_status: "nao_trabalhado",
-    last_action_label: "Importado da planilha",
     source_import_id: importId,
     external_key: row.duplicateKey ?? `import:${importId}:row:${row.rowNumber}`,
     active: true,
@@ -290,7 +348,13 @@ async function upsertCustomer(
   const created = await expectNoError(
     client
       .from("customers")
-      .insert(customerPayload)
+      .insert({
+        ...customerPayload,
+        work_status: "nao_trabalhado",
+        last_action_label: "Importado da planilha",
+        financial_status: "adimplente",
+        financial_note: null,
+      })
       .select("id")
       .single(),
     `Nao foi possivel criar cliente da linha ${row.rowNumber}`,
@@ -305,12 +369,16 @@ async function ensureCustomerContacts(
   row: ImportPreviewRow,
 ) {
   const contacts = [
-    {
+    ...(
+      row.telefonesNormalizados.length > 0
+        ? row.telefonesNormalizados
+        : [normalizePhone(row.telefone)].filter((phone) => phone.length >= 8)
+    ).map((phone, index) => ({
       kind: "telefone",
-      value: nonEmpty(row.telefone),
-      value_normalized: normalizePhone(row.telefone),
-      is_primary: true,
-    },
+      value: phone,
+      value_normalized: phone,
+      is_primary: index === 0,
+    })),
     {
       kind: "email",
       value: nonEmpty(row.email),

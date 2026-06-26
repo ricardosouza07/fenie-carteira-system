@@ -7,10 +7,13 @@ export type ImportStep = "upload" | "validacao" | "preview" | "publicacao";
 export type ImportColumnKey =
   | "razaoSocial"
   | "nomeFantasia"
+  | "documento"
+  | "inscricaoEstadual"
   | "email"
   | "telefone"
   | "cidade"
   | "estado"
+  | "ultimoPedidoNumero"
   | "dataUltimoPedido"
   | "vendedorUltimoPedido"
   | "valorUltimoPedido"
@@ -18,9 +21,16 @@ export type ImportColumnKey =
   | "cicloMedioCompra"
   | "proximaCompraPrevista"
   | "situacao"
+  | "dataCadastro"
+  | "origemCadastro"
   | "bairro"
   | "cep"
-  | "endereco";
+  | "endereco"
+  | "acessoB2B"
+  | "segmento"
+  | "tagsCliente"
+  | "proximaTarefa"
+  | "dataTarefa";
 
 export type RecognizedColumn = {
   key: ImportColumnKey;
@@ -35,20 +45,37 @@ export type ImportPreviewRow = {
   cliente: string;
   razaoSocial: string;
   nomeFantasia: string;
+  documento: string;
+  documentoNormalizado: string;
+  inscricaoEstadual: string;
   telefone: string;
+  telefoneNormalizado: string;
+  telefonesNormalizados: string[];
   email: string;
   cidade: string;
+  cidadeNormalizada: string;
   estado: string;
   bairro: string;
   endereco: string;
   cep: string;
   vendedor: string;
+  vendedorNormalizado: string;
+  ultimoPedidoNumero: string;
   ultimoPedido: string | null;
   valorUltimoPedido: number;
   diasSemComprar: number;
   cicloMedioCompraDias: number | null;
   proximaCompra: string | null;
   situacao: string;
+  dataCadastro: string | null;
+  origemCadastro: string;
+  acessoB2B: string;
+  segmento: string;
+  tagsCliente: string;
+  proximaTarefa: string;
+  dataTarefa: string | null;
+  razaoSocialNormalizada: string;
+  nomeFantasiaNormalizado: string;
   nivel: ClientLevel;
   classificacaoCalculada: string;
   isValid: boolean;
@@ -64,6 +91,7 @@ export type ParsedImportResult = {
   validRows: number;
   invalidRows: number;
   possibleDuplicates: number;
+  uniqueClients: number;
   recognizedColumns: RecognizedColumn[];
   unrecognizedColumns: string[];
   rows: ImportPreviewRow[];

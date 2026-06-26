@@ -11,7 +11,9 @@ A rota `/clientes/[id]` agora tenta carregar o contexto completo do cliente no S
 - `portfolio_items`: item mais recente da carteira, classificação, status de trabalho, datas e vendedor vinculado.
 - `salespeople`: nome do vendedor responsável/vendedor do último pedido quando houver vínculo.
 - `customer_interactions`: histórico real da timeline comercial.
-- `follow_ups`: pendências abertas, vencidas, concluídas e próximas.
+- `follow_ups`: pendências abertas, em atraso, concluídas e próximas.
+
+As classificações exibidas devem seguir `docs/REGRAS_OPERACIONAIS_FENIE.md`. Cliente convertido nos últimos 30 dias aparece como Convertido e não como Atenção, Risco, Inativo antigo ou Recompra.
 - `point_events`: pontuações relacionadas às interações do cliente.
 
 ## Query principal

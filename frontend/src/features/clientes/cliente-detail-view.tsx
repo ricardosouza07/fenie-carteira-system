@@ -1,12 +1,14 @@
 "use client";
 
 import {
+  AlertTriangle,
   ArrowLeft,
   CalendarPlus,
   CheckCircle2,
   Clock3,
   MessageCircle,
   PhoneCall,
+  Save,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -16,10 +18,15 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useGamification } from "@/features/gamification/gamification-provider";
 import { cn } from "@/lib/utils";
 import { saveInteractionToSupabaseAction } from "@/features/carteira/actions";
-import { loadClienteDetailFromSupabaseAction } from "@/features/clientes/actions";
+import {
+  loadClienteDetailFromSupabaseAction,
+  updateClienteFinancialStatusAction,
+} from "@/features/clientes/actions";
 import {
   persistImportedClientUpdate,
   useCarteiraDetailClientsSource,
@@ -36,7 +43,19 @@ import type {
   CarteiraInteractionInput,
   ContactChannel,
   ContactStatus,
+  FinancialStatus,
 } from "@/features/carteira/types";
+import {
+  FINANCIAL_RESTRICTION_MESSAGE,
+  financialStatusEditOptions,
+  getClientFinancialStatus,
+  hasFinancialRestriction,
+} from "@/features/carteira/financial-status";
+import {
+  getOperationalClientLevel,
+  isClientConverted,
+  matchesOperationalLevel,
+} from "@/features/carteira/operational-rules";
 import type { PointEvent } from "@/features/gamification/types";
 import { getCurrentPeriod } from "@/lib/current-period";
 import type {
@@ -96,7 +115,7 @@ const followUpStatusConfig: Record<
   { label: string; variant: React.ComponentProps<typeof Badge>["variant"] }
 > = {
   aberto: { label: "Aberto", variant: "info" },
-  vencido: { label: "Vencido", variant: "danger" },
+  vencido: { label: "Em atraso", variant: "danger" },
   concluido: { label: "Concluído", variant: "success" },
 };
 
@@ -135,19 +154,21 @@ function getCycleDays(client: CarteiraClient) {
     return client.cicloMedioCompraDias;
   }
 
-  if (client.nivel === "saudavel") {
+  const operationalLevel = getOperationalClientLevel(client, TODAY);
+
+  if (operationalLevel === "saudavel") {
     return 32;
   }
 
-  if (client.nivel === "atencao") {
-    return 45;
-  }
-
-  if (client.nivel === "risco") {
+  if (operationalLevel === "atencao") {
     return 60;
   }
 
-  return 90;
+  if (operationalLevel === "risco") {
+    return 90;
+  }
+
+  return 180;
 }
 
 function getOriginalSituation(client: CarteiraClient) {
@@ -155,8 +176,12 @@ function getOriginalSituation(client: CarteiraClient) {
     return client.situacaoOriginal;
   }
 
-  if (client.nivel === "inativo") {
-    return client.diasSemComprar > 180 ? "Inativo antigo" : "Inativo recente";
+  if (isClientConverted(client, TODAY)) {
+    return "Convertido nos últimos 30 dias";
+  }
+
+  if (matchesOperationalLevel(client, "inativo", TODAY)) {
+    return "Inativo antigo";
   }
 
   return "Ativo";
@@ -220,7 +245,7 @@ function getFollowUps(
 
   const fallback: FollowUpItem[] = [];
 
-  if (client.proximaCompra) {
+  if (client.proximaCompra && !isClientConverted(client, TODAY)) {
     fallback.push({
       id: `follow-${client.id}-proxima`,
       status: client.proximaCompra < TODAY ? "vencido" : "aberto",
@@ -313,6 +338,115 @@ function SummaryCard({
           {value}
         </div>
         {hint ? <div className="mt-1 text-xs text-muted-foreground">{hint}</div> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+type FinancialSaveFeedback = {
+  tone: "success" | "warning" | "danger";
+  message: string;
+};
+
+function FinancialStatusCard({
+  client,
+  onSave,
+}: {
+  client: CarteiraClient;
+  onSave: (input: {
+    situacaoFinanceira: FinancialStatus;
+    observacaoFinanceira: string | null;
+  }) => Promise<FinancialSaveFeedback>;
+}) {
+  const [status, setStatus] = useState<FinancialStatus>(
+    getClientFinancialStatus(client),
+  );
+  const [note, setNote] = useState(client.observacaoFinanceira ?? "");
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<FinancialSaveFeedback | null>(null);
+  const restricted = hasFinancialRestriction(status);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+
+    const result = await onSave({
+      situacaoFinanceira: status,
+      observacaoFinanceira: note.trim() || null,
+    });
+
+    setFeedback(result);
+    setSaving(false);
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <CardTitle>Situação Financeira</CardTitle>
+        <StatusBadge status={status} />
+      </CardHeader>
+      <CardContent>
+        {restricted ? (
+          <div className="mb-4 rounded-lg border border-danger-soft/70 bg-danger-soft/35 p-3 text-sm text-danger-soft-foreground">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p className="leading-5">{FINANCIAL_RESTRICTION_MESSAGE}</p>
+            </div>
+          </div>
+        ) : null}
+
+        <form onSubmit={handleSubmit} className="grid gap-3 lg:grid-cols-[220px_1fr_auto] lg:items-end">
+          <div className="space-y-2">
+            <Label htmlFor="financial-status">Situação financeira</Label>
+            <select
+              id="financial-status"
+              value={status}
+              onChange={(event) =>
+                setStatus(event.target.value as FinancialStatus)
+              }
+              className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
+            >
+              {financialStatusEditOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="financial-note">Observação financeira</Label>
+            <Textarea
+              id="financial-note"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Pendência, negociação, orientação do financeiro ou observação interna"
+              maxLength={420}
+              className="min-h-9 lg:min-h-9"
+            />
+          </div>
+
+          <Button type="submit" disabled={saving}>
+            <Save className="h-4 w-4" />
+            {saving ? "Salvando..." : "Salvar"}
+          </Button>
+        </form>
+
+        {feedback ? (
+          <div
+            className={cn(
+              "mt-3 rounded-md border px-3 py-2 text-sm",
+              feedback.tone === "success" &&
+                "border-success/60 bg-success/35 text-success-foreground",
+              feedback.tone === "warning" &&
+                "border-warning/60 bg-warning/35 text-warning-foreground",
+              feedback.tone === "danger" &&
+                "border-danger-soft/70 bg-danger-soft/35 text-danger-soft-foreground",
+            )}
+          >
+            {feedback.message}
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -556,6 +690,54 @@ export function ClienteDetailView({
     persistImportedClientUpdate(detail.client);
   }
 
+  async function handleSaveFinancialStatus(input: {
+    situacaoFinanceira: FinancialStatus;
+    observacaoFinanceira: string | null;
+  }): Promise<FinancialSaveFeedback> {
+    if (!client) {
+      return {
+        tone: "danger",
+        message: "Cliente não encontrado para atualização financeira.",
+      };
+    }
+
+    const updatedClient: CarteiraClient = {
+      ...client,
+      situacaoFinanceira: input.situacaoFinanceira,
+      observacaoFinanceira: input.observacaoFinanceira,
+    };
+
+    setClientOverride(updatedClient);
+    persistImportedClientUpdate(updatedClient);
+
+    const result = await updateClienteFinancialStatusAction({
+      customerId: client.id,
+      situacaoFinanceira: input.situacaoFinanceira,
+      observacaoFinanceira: input.observacaoFinanceira,
+    });
+
+    if (result.status === "success") {
+      const savedClient: CarteiraClient = {
+        ...updatedClient,
+        situacaoFinanceira: result.situacaoFinanceira,
+        observacaoFinanceira: result.observacaoFinanceira,
+      };
+
+      setClientOverride(savedClient);
+      persistImportedClientUpdate(savedClient);
+
+      return {
+        tone: "success",
+        message: result.message ?? "Situação financeira atualizada.",
+      };
+    }
+
+    return {
+      tone: result.status === "local_fallback" ? "warning" : "danger",
+      message: result.message,
+    };
+  }
+
   function dismissPersistenceToast(id: string) {
     setPersistenceToasts((current) =>
       current.filter((toast) => toast.id !== id),
@@ -583,6 +765,8 @@ export function ClienteDetailView({
     );
   }
 
+  const operationalStatus = getOperationalClientLevel(client, TODAY) ?? "convertido";
+
   return (
     <>
       <div className="space-y-4">
@@ -602,8 +786,9 @@ export function ClienteDetailView({
                 {client.cliente}
               </h1>
               <div className="mt-3 flex flex-wrap gap-2">
-                <StatusBadge status={client.nivel} />
+                <StatusBadge status={operationalStatus} />
                 <StatusBadge status={client.status} />
+                <StatusBadge status={getClientFinancialStatus(client)} />
                 <Badge variant="outline">Responsável: {client.vendedor}</Badge>
               </div>
             </div>
@@ -640,6 +825,15 @@ export function ClienteDetailView({
           </div>
         </div>
 
+        {hasFinancialRestriction(client) ? (
+          <div className="rounded-lg border border-danger-soft/70 bg-danger-soft/35 px-4 py-3 text-sm text-danger-soft-foreground">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p className="leading-5">{FINANCIAL_RESTRICTION_MESSAGE}</p>
+            </div>
+          </div>
+        ) : null}
+
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <SummaryCard
             label="Último pedido"
@@ -649,13 +843,13 @@ export function ClienteDetailView({
           <SummaryCard
             label="Dias sem comprar"
             value={client.diasSemComprar}
-            tone={
-              client.diasSemComprar >= 90
-                ? "danger"
-                : client.diasSemComprar >= 45
-                  ? "warning"
-                  : "default"
-            }
+              tone={
+                client.diasSemComprar >= 90
+                  ? "danger"
+                  : client.diasSemComprar >= 60
+                    ? "warning"
+                    : "default"
+              }
           />
           <SummaryCard
             label="Próxima compra"
@@ -674,6 +868,12 @@ export function ClienteDetailView({
           />
         </section>
 
+        <FinancialStatusCard
+          key={`${client.id}-${client.situacaoFinanceira}-${client.observacaoFinanceira ?? ""}`}
+          client={client}
+          onSave={handleSaveFinancialStatus}
+        />
+
         <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
           <Card>
             <CardHeader>
@@ -689,6 +889,11 @@ export function ClienteDetailView({
                   label="Nome fantasia"
                   value={client.nomeFantasia ?? "-"}
                 />
+                <DetailRow label="CNPJ/CPF" value={client.documento ?? "-"} />
+                <DetailRow
+                  label="Inscrição estadual"
+                  value={client.inscricaoEstadual ?? "-"}
+                />
                 <DetailRow label="Telefone" value={client.telefone} />
                 <DetailRow label="E-mail" value={client.email ?? "-"} />
                 <DetailRow label="Cidade" value={client.cidade} />
@@ -702,6 +907,10 @@ export function ClienteDetailView({
                   value={client.vendedorUltimoPedido ?? client.vendedor}
                 />
                 <DetailRow
+                  label="Número do último pedido"
+                  value={client.ultimoPedidoNumero ?? "-"}
+                />
+                <DetailRow
                   label="Data do último pedido"
                   value={formatDate(client.ultimoPedido)}
                 />
@@ -712,6 +921,28 @@ export function ClienteDetailView({
                 <DetailRow
                   label="Situação original"
                   value={getOriginalSituation(client)}
+                />
+                <DetailRow
+                  label="Data de cadastro"
+                  value={formatDate(client.dataCadastro ?? null)}
+                />
+                <DetailRow
+                  label="Origem do cadastro"
+                  value={client.origemCadastro ?? "-"}
+                />
+                <DetailRow label="Acesso B2B" value={client.acessoB2B ?? "-"} />
+                <DetailRow label="Segmento" value={client.segmento ?? "-"} />
+                <DetailRow
+                  label="Tags de cliente"
+                  value={client.tagsCliente ?? "-"}
+                />
+                <DetailRow
+                  label="Próxima tarefa"
+                  value={
+                    client.proximaTarefa
+                      ? `${client.proximaTarefa} · ${formatDate(client.dataTarefa ?? null)}`
+                      : "-"
+                  }
                 />
               </div>
             </CardContent>
@@ -730,7 +961,7 @@ export function ClienteDetailView({
                   </div>
                 </div>
                 <div className="rounded-md border bg-muted/35 p-3">
-                  <div className="text-xs text-muted-foreground">Vencidos</div>
+                  <div className="text-xs text-muted-foreground">Em atraso</div>
                   <div className="mt-1 text-lg font-semibold text-danger-soft-foreground">
                     {followUpCounts.vencido}
                   </div>

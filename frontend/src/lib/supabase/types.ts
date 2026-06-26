@@ -26,6 +26,11 @@ export type Database = {
       interaction_channel: "whatsapp" | "telefone" | "email" | "presencial";
       follow_up_status: "aberto" | "vencido" | "concluido";
       import_status: "rascunho" | "validada" | "publicada" | "erro";
+      customer_financial_status:
+        | "adimplente"
+        | "inadimplente"
+        | "bloqueado"
+        | "negociacao";
     };
     Tables: {
       profiles: {
@@ -97,6 +102,12 @@ export type Database = {
           id: string;
           legal_name: string | null;
           trade_name: string | null;
+          document: string | null;
+          document_normalized: string | null;
+          state_registration: string | null;
+          legal_name_normalized: string | null;
+          trade_name_normalized: string | null;
+          city_normalized: string | null;
           email: string | null;
           phone_primary: string | null;
           phone_normalized: string;
@@ -106,6 +117,7 @@ export type Database = {
           zip_code: string | null;
           address: string | null;
           assigned_salesperson_id: string | null;
+          last_order_number: string | null;
           last_order_salesperson_name: string | null;
           last_order_date: string | null;
           last_order_value: number;
@@ -113,7 +125,17 @@ export type Database = {
           average_purchase_cycle_days: number | null;
           next_purchase_date: string | null;
           original_situation: string | null;
+          registration_date: string | null;
+          registration_origin: string | null;
+          mercos_situation: string | null;
+          b2b_access: string | null;
+          segment: string | null;
+          customer_tags: string | null;
+          next_task: string | null;
+          task_date: string | null;
           health_status: Database["public"]["Enums"]["customer_health_status"];
+          financial_status: Database["public"]["Enums"]["customer_financial_status"];
+          financial_note: string | null;
           work_status: Database["public"]["Enums"]["work_status"];
           last_action_label: string | null;
           last_action_at: string | null;
@@ -127,6 +149,12 @@ export type Database = {
           id?: string;
           legal_name?: string | null;
           trade_name?: string | null;
+          document?: string | null;
+          document_normalized?: string | null;
+          state_registration?: string | null;
+          legal_name_normalized?: string | null;
+          trade_name_normalized?: string | null;
+          city_normalized?: string | null;
           email?: string | null;
           phone_primary?: string | null;
           city?: string | null;
@@ -135,6 +163,7 @@ export type Database = {
           zip_code?: string | null;
           address?: string | null;
           assigned_salesperson_id?: string | null;
+          last_order_number?: string | null;
           last_order_salesperson_name?: string | null;
           last_order_date?: string | null;
           last_order_value?: number;
@@ -142,7 +171,17 @@ export type Database = {
           average_purchase_cycle_days?: number | null;
           next_purchase_date?: string | null;
           original_situation?: string | null;
+          registration_date?: string | null;
+          registration_origin?: string | null;
+          mercos_situation?: string | null;
+          b2b_access?: string | null;
+          segment?: string | null;
+          customer_tags?: string | null;
+          next_task?: string | null;
+          task_date?: string | null;
           health_status?: Database["public"]["Enums"]["customer_health_status"];
+          financial_status?: Database["public"]["Enums"]["customer_financial_status"];
+          financial_note?: string | null;
           work_status?: Database["public"]["Enums"]["work_status"];
           last_action_label?: string | null;
           last_action_at?: string | null;
