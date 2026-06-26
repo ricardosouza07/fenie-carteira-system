@@ -27,16 +27,14 @@ import type {
 } from "@/features/gamification/types";
 import { getCurrentPeriod } from "@/lib/current-period";
 import {
+  buildOperationalCounts,
   calculateClientHealthStatus,
   isClientConverted,
   isClientInRecompra,
   isClientOldInactive,
   matchesOperationalLevel,
 } from "@/features/carteira/operational-rules";
-import {
-  getClientFinancialStatus,
-  normalizeFinancialStatus,
-} from "@/features/carteira/financial-status";
+import { normalizeFinancialStatus } from "@/features/carteira/financial-status";
 
 import type {
   DashboardMetrics,
@@ -597,26 +595,19 @@ function buildMetrics(input: {
   const visitInteractions = interactions.filter(
     (interaction) => getInteractionStatus(interaction) === "visita",
   );
+  const operationalCounts = buildOperationalCounts(clients, TODAY);
 
   return {
-    totalClientes: clients.length,
-    saudaveis: clients.filter((client) =>
-      matchesOperationalLevel(client, "saudavel", TODAY),
-    ).length,
-    atencao: clients.filter((client) =>
-      matchesOperationalLevel(client, "atencao", TODAY),
-    ).length,
-    risco: clients.filter((client) =>
-      matchesOperationalLevel(client, "risco", TODAY),
-    ).length,
-    inativosAntigos: clients.filter((client) =>
-      isClientOldInactive(client, TODAY),
-    ).length,
+    totalClientes: operationalCounts.totalClientes,
+    saudaveis: operationalCounts.saudaveis,
+    atencao: operationalCounts.atencao,
+    risco: operationalCounts.risco,
+    inativosAntigos: operationalCounts.inativosAntigos,
+    recomprasPendentes: operationalCounts.recomprasPendentes,
     trabalhadosMes: uniqueCount(
       interactions.map((interaction) => stringOrNull(interaction.customer_id)),
     ),
-    naoTrabalhados: clients.filter((client) => client.status === "nao_trabalhado")
-      .length,
+    naoTrabalhados: operationalCounts.naoTrabalhados,
     convertidos: uniqueCount(
       convertedInteractions.map((interaction) =>
         stringOrNull(interaction.customer_id),
@@ -643,15 +634,9 @@ function buildMetrics(input: {
       (total, event) => total + integerOrZero(event.points),
       0,
     ),
-    clientesInadimplentes: clients.filter(
-      (client) => getClientFinancialStatus(client) === "inadimplente",
-    ).length,
-    clientesBloqueados: clients.filter(
-      (client) => getClientFinancialStatus(client) === "bloqueado",
-    ).length,
-    negociacoesFinanceiras: clients.filter(
-      (client) => getClientFinancialStatus(client) === "negociacao",
-    ).length,
+    clientesInadimplentes: operationalCounts.clientesInadimplentes,
+    clientesBloqueados: operationalCounts.clientesBloqueados,
+    negociacoesFinanceiras: operationalCounts.negociacoesFinanceiras,
   };
 }
 

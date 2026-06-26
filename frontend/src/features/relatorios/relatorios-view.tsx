@@ -40,6 +40,7 @@ import {
   isClientConverted,
   isClientInRecompra,
   matchesOperationalLevel,
+  operationalIndicatorInfo,
 } from "@/features/carteira/operational-rules";
 import { useGamification } from "@/features/gamification/gamification-provider";
 import type { PointEvent } from "@/features/gamification/types";
@@ -80,6 +81,7 @@ type SummaryKpi = {
   label: string;
   value: string;
   hint: string;
+  description: string;
   icon: LucideIcon;
   tone: KpiTone;
 };
@@ -96,7 +98,7 @@ type ReportData = {
 const monthLabels: Record<string, string> = {
   "01": "Janeiro",
   "02": "Fevereiro",
-  "03": "Marco",
+  "03": "Março",
   "04": "Abril",
   "05": "Maio",
   "06": "Junho",
@@ -110,7 +112,7 @@ const monthLabels: Record<string, string> = {
 
 const statusOptions: SelectOption[] = [
   { value: "todos", label: "Todos os status" },
-  { value: "nao_trabalhado", label: "Nao trabalhado" },
+  { value: "nao_trabalhado", label: "Não trabalhado" },
   { value: "contatado", label: "Contatado" },
   { value: "aguardando", label: "Aguardando retorno" },
   { value: "convertido", label: "Convertido" },
@@ -118,7 +120,7 @@ const statusOptions: SelectOption[] = [
 ];
 
 const levelOptions: SelectOption[] = [
-  { value: "todas", label: "Todas as classificacoes" },
+  { value: "todas", label: "Todas as classificações" },
   { value: "saudavel", label: getClientHealthLabel("saudavel") },
   { value: "atencao", label: getClientHealthLabel("atencao") },
   { value: "risco", label: getClientHealthLabel("risco") },
@@ -315,7 +317,7 @@ function getFollowUpMotivo(client: CarteiraClient) {
     return "Recompra";
   }
 
-  return "Proxima compra prevista";
+  return "Próxima compra prevista";
 }
 
 function isPending(client: CarteiraClient) {
@@ -608,21 +610,24 @@ function buildReport(input: {
       {
         label: "Clientes trabalhados",
         value: String(workedCustomers),
-        hint: "Clientes unicos com acao no periodo",
+        hint: "Clientes únicos com ação no período",
+        description: "Clientes com interação comercial registrada no período filtrado.",
         icon: Users,
         tone: "info",
       },
       {
-        label: "Convertidos",
+        label: "Convertidos no período",
         value: String(convertedCustomers),
-        hint: "Clientes convertidos no periodo",
+        hint: operationalIndicatorInfo.convertidos.description,
+        description: operationalIndicatorInfo.convertidos.description,
         icon: CheckCircle2,
         tone: "success",
       },
       {
-        label: "Taxa de conversao",
+        label: "Taxa de conversão",
         value: formatPercent(getConversionRate(workedCustomers, convertedCustomers)),
         hint: "Convertidos sobre trabalhados",
+        description: "Percentual de clientes convertidos sobre clientes trabalhados no período.",
         icon: Percent,
         tone: "default",
       },
@@ -630,6 +635,7 @@ function buildReport(input: {
         label: "Valor recuperado",
         value: formatCurrency(recoveredValue),
         hint: "Soma das conversoes",
+        description: "Soma dos valores recuperados em conversões no período.",
         icon: FileSpreadsheet,
         tone: "success",
       },
@@ -637,6 +643,7 @@ function buildReport(input: {
         label: "Visitas encaminhadas",
         value: String(visits),
         hint: "Acoes presenciais no periodo",
+        description: "Clientes com visita encaminhada dentro do período filtrado.",
         icon: Route,
         tone: "info",
       },
@@ -644,13 +651,15 @@ function buildReport(input: {
         label: "Follow-ups em atraso",
         value: String(overdueFollowUps),
         hint: "Prazos em atraso no filtro",
+        description: "Follow-ups ou tarefas com prazo anterior a hoje.",
         icon: Clock3,
         tone: overdueFollowUps > 0 ? "warning" : "success",
       },
       {
         label: "Pontos gerados",
         value: String(generatedPoints),
-        hint: "Gamificacao no periodo",
+        hint: "Gamificação no período",
+        description: "Pontos comerciais gerados pela campanha no período filtrado.",
         icon: Trophy,
         tone: "success",
       },
@@ -714,18 +723,21 @@ function SelectFilter({
   value,
   options,
   onChange,
+  description,
 }: {
   label: string;
   value: string;
   options: SelectOption[];
   onChange: (value: string) => void;
+  description?: string;
 }) {
   return (
-    <label className="min-w-0">
+    <label className="min-w-0" title={description}>
       <span className="mb-1 block text-xs font-medium text-muted-foreground">
         {label}
       </span>
       <select
+        title={description ?? label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
@@ -766,7 +778,7 @@ function SourceNotice({
         <div className="mt-0.5 text-xs leading-5 opacity-85">
           {message ??
             (isLive
-              ? "Fechamento calculado com carteira atual, interacoes, conversoes, follow-ups, pontos e vendedores reais."
+              ? "Fechamento calculado com carteira atual, interações, conversões, follow-ups, pontos e vendedores reais."
               : "Os dados mockados/localStorage continuam disponiveis enquanto a base real nao estiver pronta.")}
         </div>
       </div>
@@ -779,7 +791,7 @@ function SummaryCard({ item }: { item: SummaryKpi }) {
   const tone = kpiToneClasses[item.tone];
 
   return (
-    <Card className="min-w-0">
+    <Card className="min-w-0" title={item.description}>
       <CardContent className="p-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -876,7 +888,7 @@ function WorkedTable({
               <TableHead>Cliente</TableHead>
               <TableHead>Vendedor</TableHead>
               <TableHead>Cidade</TableHead>
-              <TableHead>Classificacao</TableHead>
+              <TableHead>Classificação</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Ultima acao</TableHead>
               <TableHead>Canal</TableHead>
@@ -960,7 +972,7 @@ function ConvertedTable({
               <TableHead>Vendedor</TableHead>
               <TableHead>Cidade</TableHead>
               <TableHead className="text-right">Valor recuperado</TableHead>
-              <TableHead>Data da conversao</TableHead>
+              <TableHead>Data da conversão</TableHead>
               <TableHead>Tipo/origem</TableHead>
             </TableRow>
           </TableHeader>
@@ -1035,7 +1047,7 @@ function SellerPerformanceTable({
               <TableHead>Vendedor</TableHead>
               <TableHead className="text-right">Contatos</TableHead>
               <TableHead className="text-right">Convertidos</TableHead>
-              <TableHead className="text-right">Taxa de conversao</TableHead>
+              <TableHead className="text-right">Taxa de conversão</TableHead>
               <TableHead className="text-right">Visitas encaminhadas</TableHead>
               <TableHead className="text-right">Valor recuperado</TableHead>
               <TableHead className="text-right">Follow-ups em atraso</TableHead>
@@ -1383,9 +1395,10 @@ export function RelatoriosView({
       <Card className="mb-4">
         <CardContent className="grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-5">
           <SelectFilter
-            label="Periodo/mes"
+            label="Período/mês"
             value={period}
             options={periodOptions}
+            description="Período usado para interações, conversões, follow-ups e pontos."
             onChange={setPeriod}
           />
           <SelectFilter
@@ -1404,12 +1417,14 @@ export function RelatoriosView({
             label="Status"
             value={status}
             options={statusOptions}
+            description="Status operacional definido pela última interação comercial registrada."
             onChange={(value) => setStatus(value as StatusFilter)}
           />
           <SelectFilter
-            label="Classificacao"
+            label="Classificação"
             value={level}
             options={levelOptions}
+            description="Saúde comercial calculada por dias sem comprar. Convertidos recentes não entram em Atenção, Risco, Inativo ou Recompra."
             onChange={(value) => setLevel(value as LevelFilter)}
           />
         </CardContent>

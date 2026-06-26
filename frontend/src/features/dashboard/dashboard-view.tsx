@@ -34,13 +34,14 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { useCarteiraClientsSource } from "@/features/carteira/client-store";
-import { getClientFinancialStatus } from "@/features/carteira/financial-status";
 import {
+  buildOperationalCounts,
   getOperationalClientLevel,
   isClientConverted,
   isClientInRecompra,
   isClientOldInactive,
   matchesOperationalLevel,
+  operationalIndicatorInfo,
 } from "@/features/carteira/operational-rules";
 import { useGamification } from "@/features/gamification/gamification-provider";
 import { MonthlyAchievementsPanel } from "@/features/gamification/monthly-achievements-panel";
@@ -74,6 +75,7 @@ type DashboardKpi = {
   label: string;
   value: string;
   hint: string;
+  description: string;
   href: string;
   icon: LucideIcon;
   tone: KpiTone;
@@ -82,6 +84,7 @@ type DashboardKpi = {
 type AlertItem = {
   label: string;
   count: number;
+  total: number;
   description: string;
   href: string;
   tone: KpiTone;
@@ -573,6 +576,7 @@ function KpiLinkCard({ kpi }: { kpi: DashboardKpi }) {
   return (
     <Link
       href={kpi.href}
+      title={kpi.description}
       className="group block min-h-[132px] rounded-lg border bg-card p-3 shadow-sm outline-none transition hover:border-primary/40 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       <div className="flex items-start justify-between gap-3">
@@ -613,6 +617,7 @@ function OperationalAlerts({ alerts }: { alerts: AlertItem[] }) {
             <Link
               key={alert.label}
               href={alert.href}
+              title={alert.description}
               className="flex min-h-16 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-sm transition hover:border-primary/40 hover:bg-muted/45"
             >
               <span className="flex min-w-0 items-center gap-3">
@@ -627,7 +632,7 @@ function OperationalAlerts({ alerts }: { alerts: AlertItem[] }) {
                 </span>
               </span>
               <span className={cn("rounded-md px-2 py-1 font-mono text-sm", tone.soft)}>
-                {alert.count}
+                {alert.count} de {alert.total}
               </span>
             </Link>
           );
@@ -1062,12 +1067,6 @@ export function DashboardView({
       : fallbackGamificationSummary;
 
   const dashboard = useMemo(() => {
-    const riskClients = filteredClients.filter((client) =>
-      matchesOperationalLevel(client, "risco", TODAY),
-    );
-    const oldInactiveClients = filteredClients.filter((client) =>
-      isClientOldInactive(client, TODAY),
-    );
     const workedClients = filteredClients.filter((client) =>
       isWorkedInPeriod(client, month, year),
     );
@@ -1086,35 +1085,20 @@ export function DashboardView({
     const visitsClients = filteredClients.filter(
       (client) => client.status === "visita",
     );
-    const notWorkedClients = filteredClients.filter(
-      (client) => client.status === "nao_trabalhado",
-    );
-    const riskWithoutContact = filteredClients.filter(
-      (client) =>
-        matchesOperationalLevel(client, "risco", TODAY) &&
-        client.status === "nao_trabalhado",
-    );
-    const inactiveWithoutAction = filteredClients.filter(
-      (client) =>
-        isClientOldInactive(client, TODAY) &&
-        client.status === "nao_trabalhado",
-    );
+    const operationalCounts = buildOperationalCounts(filteredClients, TODAY);
     const recoveredValue = convertedClients.reduce(
       (total, client) => total + getRecoveredValue(client),
       0,
     );
     const fallbackMetrics: DashboardMetrics = {
-      totalClientes: filteredClients.length,
-      saudaveis: filteredClients.filter((client) =>
-        matchesOperationalLevel(client, "saudavel", TODAY),
-      ).length,
-      atencao: filteredClients.filter((client) =>
-        matchesOperationalLevel(client, "atencao", TODAY),
-      ).length,
-      risco: riskClients.length,
-      inativosAntigos: oldInactiveClients.length,
+      totalClientes: operationalCounts.totalClientes,
+      saudaveis: operationalCounts.saudaveis,
+      atencao: operationalCounts.atencao,
+      risco: operationalCounts.risco,
+      inativosAntigos: operationalCounts.inativosAntigos,
+      recomprasPendentes: operationalCounts.recomprasPendentes,
       trabalhadosMes: workedClients.length,
-      naoTrabalhados: notWorkedClients.length,
+      naoTrabalhados: operationalCounts.naoTrabalhados,
       convertidos: convertedClients.length,
       valorRecuperado: recoveredValue,
       aguardandoRetorno: awaitingClients.length,
@@ -1123,15 +1107,9 @@ export function DashboardView({
       followUpsHoje: followUpsToday.length,
       contatosRealizados: workedClients.length,
       pontosMes: gamificationSummary.totalPoints,
-      clientesInadimplentes: filteredClients.filter(
-        (client) => getClientFinancialStatus(client) === "inadimplente",
-      ).length,
-      clientesBloqueados: filteredClients.filter(
-        (client) => getClientFinancialStatus(client) === "bloqueado",
-      ).length,
-      negociacoesFinanceiras: filteredClients.filter(
-        (client) => getClientFinancialStatus(client) === "negociacao",
-      ).length,
+      clientesInadimplentes: operationalCounts.clientesInadimplentes,
+      clientesBloqueados: operationalCounts.clientesBloqueados,
+      negociacoesFinanceiras: operationalCounts.negociacoesFinanceiras,
     };
     const metrics =
       useSupabaseTotals && initialDashboard.metrics
@@ -1151,39 +1129,62 @@ export function DashboardView({
         {
           label: "Total de clientes",
           value: String(metrics.totalClientes),
-          hint: "Base filtrada",
+          hint: "Clientes da carteira atual",
+          description: "Total de clientes da última importação publicada, respeitando os filtros aplicados.",
           href: buildCarteiraHref(),
           icon: Users,
           tone: "default",
         },
         {
-          label: "Clientes em risco",
+          label: operationalIndicatorInfo.atencao.dashboardLabel,
+          value: String(metrics.atencao),
+          hint: operationalIndicatorInfo.atencao.description,
+          description: operationalIndicatorInfo.atencao.description,
+          href: buildCarteiraHref({ classificacao: "atencao" }),
+          icon: AlertTriangle,
+          tone: "warning",
+        },
+        {
+          label: operationalIndicatorInfo.risco.dashboardLabel,
           value: String(metrics.risco),
-          hint: "Prioridade comercial",
+          hint: operationalIndicatorInfo.risco.description,
+          description: operationalIndicatorInfo.risco.description,
           href: buildCarteiraHref({ classificacao: "risco" }),
           icon: AlertTriangle,
           tone: "danger",
         },
         {
-          label: "Inativos antigos",
+          label: operationalIndicatorInfo.inativos.dashboardLabel,
           value: String(metrics.inativosAntigos),
-          hint: "180+ dias sem compra",
+          hint: operationalIndicatorInfo.inativos.description,
+          description: operationalIndicatorInfo.inativos.description,
           href: buildCarteiraHref({ classificacao: "inativo" }),
           icon: Clock3,
           tone: "muted",
         },
         {
+          label: operationalIndicatorInfo.recompra.dashboardLabel,
+          value: String(metrics.recomprasPendentes),
+          hint: operationalIndicatorInfo.recompra.description,
+          description: operationalIndicatorInfo.recompra.description,
+          href: buildCarteiraHref({ proxima: "recompra" }),
+          icon: RefreshCw,
+          tone: "warning",
+        },
+        {
           label: "Trabalhados no mês",
           value: String(metrics.trabalhadosMes),
-          hint: `${getMonthLabel(month)}/${year}`,
+          hint: `Com interação em ${getMonthLabel(month)}/${year}`,
+          description: "Clientes com registro comercial no período selecionado.",
           href: buildCarteiraHref(),
           icon: PhoneCall,
           tone: "info",
         },
         {
-          label: "Convertidos",
+          label: operationalIndicatorInfo.convertidos.dashboardLabel,
           value: String(metrics.convertidos),
-          hint: "Pedidos recuperados",
+          hint: operationalIndicatorInfo.convertidos.description,
+          description: operationalIndicatorInfo.convertidos.description,
           href: getStatusFilter("convertido"),
           icon: CheckCircle2,
           tone: "success",
@@ -1192,6 +1193,7 @@ export function DashboardView({
           label: "Valor recuperado",
           value: formatCurrency(metrics.valorRecuperado),
           hint: "Soma dos convertidos",
+          description: "Soma dos valores recuperados em conversões registradas no período.",
           href: getStatusFilter("convertido"),
           icon: DollarSign,
           tone: "success",
@@ -1199,7 +1201,8 @@ export function DashboardView({
         {
           label: "Follow-ups em atraso",
           value: String(metrics.followUpsVencidos),
-          hint: "Retornos fora do prazo",
+          hint: "Tarefas com prazo vencido",
+          description: "Follow-ups ou tarefas comerciais com prazo anterior a hoje.",
           href: "/agenda",
           icon: RefreshCw,
           tone: "warning",
@@ -1208,38 +1211,43 @@ export function DashboardView({
           label: "Aguardando retorno",
           value: String(metrics.aguardandoRetorno),
           hint: "Clientes já acionados",
+          description: "Clientes com status operacional Aguardando retorno.",
           href: getStatusFilter("aguardando"),
           icon: Clock3,
           tone: "warning",
         },
         {
-          label: "Clientes inadimplentes",
+          label: operationalIndicatorInfo.inadimplentes.dashboardLabel,
           value: String(metrics.clientesInadimplentes),
-          hint: "Consultar financeiro",
+          hint: operationalIndicatorInfo.inadimplentes.description,
+          description: operationalIndicatorInfo.inadimplentes.description,
           href: buildCarteiraHref({ financeiro: "inadimplente" }),
           icon: ShieldAlert,
           tone: "danger",
         },
         {
-          label: "Clientes bloqueados",
+          label: operationalIndicatorInfo.bloqueados.dashboardLabel,
           value: String(metrics.clientesBloqueados),
-          hint: "Venda bloqueada",
+          hint: operationalIndicatorInfo.bloqueados.description,
+          description: operationalIndicatorInfo.bloqueados.description,
           href: buildCarteiraHref({ financeiro: "bloqueado" }),
           icon: ShieldAlert,
           tone: "danger",
         },
         {
-          label: "Negociações financeiras",
+          label: operationalIndicatorInfo.negociacoes_financeiras.dashboardLabel,
           value: String(metrics.negociacoesFinanceiras),
-          hint: "Regularização em andamento",
+          hint: operationalIndicatorInfo.negociacoes_financeiras.description,
+          description: operationalIndicatorInfo.negociacoes_financeiras.description,
           href: buildCarteiraHref({ financeiro: "negociacao" }),
           icon: DollarSign,
           tone: "warning",
         },
         {
-          label: "Nao trabalhados",
+          label: operationalIndicatorInfo.nao_trabalhados.dashboardLabel,
           value: String(metrics.naoTrabalhados),
-          hint: "Sem acao comercial",
+          hint: operationalIndicatorInfo.nao_trabalhados.description,
+          description: operationalIndicatorInfo.nao_trabalhados.description,
           href: getStatusFilter("nao_trabalhado"),
           icon: ListChecks,
           tone: "muted",
@@ -1248,6 +1256,7 @@ export function DashboardView({
           label: "Visitas encaminhadas",
           value: String(metrics.visitasEncaminhadas),
           hint: "Acompanhamento externo",
+          description: "Clientes com visita comercial encaminhada.",
           href: getStatusFilter("visita"),
           icon: Activity,
           tone: "info",
@@ -1256,6 +1265,7 @@ export function DashboardView({
           label: "Follow-ups hoje",
           value: String(metrics.followUpsHoje),
           hint: "Retornos do dia",
+          description: "Follow-ups com prazo para hoje.",
           href: "/agenda",
           icon: Clock3,
           tone: "info",
@@ -1264,14 +1274,16 @@ export function DashboardView({
           label: "Contatos realizados",
           value: String(metrics.contatosRealizados),
           hint: `${getMonthLabel(month)}/${year}`,
+          description: "Quantidade de interações comerciais registradas no período.",
           href: buildCarteiraHref(),
           icon: PhoneCall,
           tone: "default",
         },
         {
-          label: "Pontos do mes",
+          label: "Pontos do mês",
           value: String(metrics.pontosMes),
-          hint: "Gamificacao real/local",
+          hint: "Gamificação real/local",
+          description: "Pontos comerciais gerados no mês pela campanha ativa.",
           href: "/metas",
           icon: BarChart3,
           tone: "success",
@@ -1279,16 +1291,10 @@ export function DashboardView({
       ] satisfies DashboardKpi[],
       alerts: [
         {
-          label: "Follow-ups em atraso",
-          count: metrics.followUpsVencidos,
-          description: "Retornos com prazo anterior a hoje",
-          href: "/agenda",
-          tone: "warning",
-        },
-        {
           label: "Clientes em risco sem contato",
-          count: riskWithoutContact.length,
-          description: "Risco com status não trabalhado",
+          count: operationalCounts.riscoSemContato,
+          total: metrics.risco,
+          description: `${operationalCounts.riscoSemContato} clientes em risco ainda não receberam interação.`,
           href: buildCarteiraHref({
             classificacao: "risco",
             status: "nao_trabalhado",
@@ -1297,8 +1303,9 @@ export function DashboardView({
         },
         {
           label: "Inativos sem ação",
-          count: inactiveWithoutAction.length,
-          description: "Carteira parada sem registro comercial",
+          count: operationalCounts.inativosSemAcao,
+          total: metrics.inativosAntigos,
+          description: `${operationalCounts.inativosSemAcao} inativos ainda não possuem registro comercial.`,
           href: buildCarteiraHref({
             classificacao: "inativo",
             status: "nao_trabalhado",
@@ -1306,9 +1313,18 @@ export function DashboardView({
           tone: "muted",
         },
         {
+          label: "Recompras pendentes",
+          count: metrics.recomprasPendentes,
+          total: metrics.totalClientes,
+          description: `${metrics.recomprasPendentes} clientes têm próxima compra prevista já passada.`,
+          href: buildCarteiraHref({ proxima: "recompra" }),
+          tone: "warning",
+        },
+        {
           label: "Aguardando retorno",
           count: metrics.aguardandoRetorno,
-          description: "Clientes que precisam de acompanhamento",
+          total: metrics.totalClientes,
+          description: `${metrics.aguardandoRetorno} clientes estão aguardando retorno comercial.`,
           href: getStatusFilter("aguardando"),
           tone: "warning",
         },

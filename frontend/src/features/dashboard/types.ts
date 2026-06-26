@@ -13,6 +13,7 @@ export type DashboardMetrics = {
   atencao: number;
   risco: number;
   inativosAntigos: number;
+  recomprasPendentes: number;
   trabalhadosMes: number;
   naoTrabalhados: number;
   convertidos: number;

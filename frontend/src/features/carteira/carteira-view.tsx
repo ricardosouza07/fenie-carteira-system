@@ -61,11 +61,13 @@ import {
   normalizeFinancialStatus,
 } from "./financial-status";
 import {
+  buildOperationalCounts,
   getClientHealthLabel,
   getOperationalClientLevel,
   isClientConverted,
   isClientInRecompra,
   matchesOperationalLevel,
+  operationalIndicatorInfo,
 } from "./operational-rules";
 import { InteractionDrawer } from "./interaction-drawer";
 import {
@@ -140,14 +142,42 @@ const nextPurchaseOptions: { value: NextPurchaseFilter; label: string }[] = [
   { value: "sem_previsao", label: "Sem previsão" },
 ];
 
-const quickFilters: { value: QuickFilter; label: string }[] = [
-  { value: "todos", label: "Todos" },
-  { value: "atencao", label: "Atenção" },
-  { value: "risco", label: "Risco" },
-  { value: "inativos", label: "Inativos antigos" },
-  { value: "nao_trabalhados", label: "Não trabalhados" },
-  { value: "convertidos", label: "Convertidos" },
-  { value: "recompra", label: "Recompra" },
+const quickFilters: { value: QuickFilter; label: string; description: string }[] = [
+  {
+    value: "todos",
+    label: "Todos",
+    description: "Todos os clientes conforme filtros aplicados.",
+  },
+  {
+    value: "atencao",
+    label: operationalIndicatorInfo.atencao.carteiraLabel,
+    description: operationalIndicatorInfo.atencao.description,
+  },
+  {
+    value: "risco",
+    label: operationalIndicatorInfo.risco.carteiraLabel,
+    description: operationalIndicatorInfo.risco.description,
+  },
+  {
+    value: "inativos",
+    label: operationalIndicatorInfo.inativos.carteiraLabel,
+    description: operationalIndicatorInfo.inativos.description,
+  },
+  {
+    value: "nao_trabalhados",
+    label: operationalIndicatorInfo.nao_trabalhados.carteiraLabel,
+    description: operationalIndicatorInfo.nao_trabalhados.description,
+  },
+  {
+    value: "convertidos",
+    label: operationalIndicatorInfo.convertidos.carteiraLabel,
+    description: operationalIndicatorInfo.convertidos.description,
+  },
+  {
+    value: "recompra",
+    label: operationalIndicatorInfo.recompra.carteiraLabel,
+    description: operationalIndicatorInfo.recompra.description,
+  },
 ];
 
 const levelValues: ClientLevel[] = ["saudavel", "atencao", "risco", "inativo"];
@@ -435,16 +465,19 @@ function SelectFilter({
   value,
   options,
   onChange,
+  description,
 }: {
   label: string;
   value: string;
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
+  description?: string;
 }) {
   return (
-    <label className="min-w-0">
+    <label className="min-w-0" title={description}>
       <span className="sr-only">{label}</span>
       <select
+        title={description ?? label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
@@ -1146,13 +1179,8 @@ export function CarteiraView() {
 
   const summary = useMemo(
     () => ({
-      total: clients.length,
+      ...buildOperationalCounts(clients, TODAY),
       visible: sortedClients.length,
-      risk: clients.filter((client) =>
-        matchesOperationalLevel(client, "risco", TODAY),
-      ).length,
-      recompra: clients.filter((client) => isClientInRecompra(client, TODAY))
-        .length,
     }),
     [clients, sortedClients.length],
   );
@@ -1284,32 +1312,78 @@ export function CarteiraView() {
 
       <CarteiraSourceNotice state={sourceState} />
 
-      <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Card>
+      <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
+        <Card title="Total de clientes da carteira atual.">
           <CardContent className="p-3">
             <div className="text-xs text-muted-foreground">Clientes na base</div>
-            <div className="mt-1 text-xl font-semibold">{summary.total}</div>
+            <div className="mt-1 text-xl font-semibold">
+              {summary.totalClientes}
+            </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card title="Quantidade de clientes visível após filtros e busca.">
           <CardContent className="p-3">
             <div className="text-xs text-muted-foreground">Na seleção</div>
             <div className="mt-1 text-xl font-semibold">{summary.visible}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card title={operationalIndicatorInfo.atencao.description}>
           <CardContent className="p-3">
-            <div className="text-xs text-muted-foreground">Em risco</div>
-            <div className="mt-1 text-xl font-semibold text-danger-soft-foreground">
-              {summary.risk}
+            <div className="text-xs text-muted-foreground">
+              {operationalIndicatorInfo.atencao.carteiraLabel}
+            </div>
+            <div className="mt-1 text-xl font-semibold text-warning-foreground">
+              {summary.atencao}
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card title={operationalIndicatorInfo.risco.description}>
           <CardContent className="p-3">
-            <div className="text-xs text-muted-foreground">Recompra</div>
+            <div className="text-xs text-muted-foreground">
+              {operationalIndicatorInfo.risco.carteiraLabel}
+            </div>
+            <div className="mt-1 text-xl font-semibold text-danger-soft-foreground">
+              {summary.risco}
+            </div>
+          </CardContent>
+        </Card>
+        <Card title={operationalIndicatorInfo.inativos.description}>
+          <CardContent className="p-3">
+            <div className="text-xs text-muted-foreground">
+              {operationalIndicatorInfo.inativos.carteiraLabel}
+            </div>
+            <div className="mt-1 text-xl font-semibold text-muted-foreground">
+              {summary.inativosAntigos}
+            </div>
+          </CardContent>
+        </Card>
+        <Card title={operationalIndicatorInfo.recompra.description}>
+          <CardContent className="p-3">
+            <div className="text-xs text-muted-foreground">
+              {operationalIndicatorInfo.recompra.carteiraLabel}
+            </div>
             <div className="mt-1 text-xl font-semibold text-warning-foreground">
-              {summary.recompra}
+              {summary.recomprasPendentes}
+            </div>
+          </CardContent>
+        </Card>
+        <Card title={operationalIndicatorInfo.convertidos.description}>
+          <CardContent className="p-3">
+            <div className="text-xs text-muted-foreground">
+              {operationalIndicatorInfo.convertidos.carteiraLabel}
+            </div>
+            <div className="mt-1 text-xl font-semibold text-success-foreground">
+              {summary.convertidos}
+            </div>
+          </CardContent>
+        </Card>
+        <Card title={operationalIndicatorInfo.nao_trabalhados.description}>
+          <CardContent className="p-3">
+            <div className="text-xs text-muted-foreground">
+              {operationalIndicatorInfo.nao_trabalhados.carteiraLabel}
+            </div>
+            <div className="mt-1 text-xl font-semibold text-muted-foreground">
+              {summary.naoTrabalhados}
             </div>
           </CardContent>
         </Card>
@@ -1349,6 +1423,7 @@ export function CarteiraView() {
               label="Classificação"
               value={level}
               options={levelOptions}
+              description="Saúde comercial calculada por dias sem comprar. Convertidos recentes não entram em Atenção, Risco, Inativo ou Recompra."
               onChange={(value) => {
                 setLevel(value as "todas" | ClientLevel);
                 setCurrentPage(1);
@@ -1358,6 +1433,7 @@ export function CarteiraView() {
               label="Status"
               value={status}
               options={statusOptions}
+              description="Status operacional definido pela última interação comercial registrada."
               onChange={(value) => {
                 setStatus(value as "todos" | WorkStatus);
                 setCurrentPage(1);
@@ -1367,6 +1443,7 @@ export function CarteiraView() {
               label="Situação financeira"
               value={financialStatus}
               options={financialStatusFilterOptions}
+              description="Situação financeira marcada manualmente pelo escritório."
               onChange={(value) => {
                 setFinancialStatus(value as "todas" | FinancialStatus);
                 setCurrentPage(1);
@@ -1376,6 +1453,7 @@ export function CarteiraView() {
               label="Próxima compra"
               value={nextPurchase}
               options={nextPurchaseOptions}
+              description="Recompra significa próxima compra prevista já passada."
               onChange={(value) => {
                 setNextPurchase(value as NextPurchaseFilter);
                 setCurrentPage(1);
@@ -1391,6 +1469,8 @@ export function CarteiraView() {
                   type="button"
                   variant={quickFilter === filter.value ? "subtle" : "outline"}
                   size="sm"
+                  title={filter.description}
+                  aria-label={`${filter.label}: ${filter.description}`}
                   onClick={() => {
                     setQuickFilter(filter.value);
                     setCurrentPage(1);

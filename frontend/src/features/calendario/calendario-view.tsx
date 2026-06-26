@@ -91,7 +91,7 @@ const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
 
 const eventTypeOptions: SelectOption[] = [
   { value: "todos", label: "Todos os tipos" },
-  { value: "proxima_compra", label: "Proxima compra" },
+  { value: "proxima_compra", label: "Próxima compra" },
   { value: "follow_up", label: "Follow-up" },
   { value: "visita", label: "Visita" },
   { value: "vencido", label: "Recompra" },
@@ -100,14 +100,14 @@ const eventTypeOptions: SelectOption[] = [
 
 const statusOptions: SelectOption[] = [
   { value: "todos", label: "Todos os status" },
-  { value: "nao_trabalhado", label: "Nao trabalhado" },
+  { value: "nao_trabalhado", label: "Não trabalhado" },
   { value: "contatado", label: "Contatado" },
   { value: "aguardando", label: "Aguardando retorno" },
   { value: "convertido", label: "Convertido" },
   { value: "visita", label: "Visita encaminhada" },
   { value: "aberto", label: "Follow-up aberto" },
-  { value: "vencido", label: "Recompra / atraso" },
-  { value: "concluido", label: "Concluido" },
+  { value: "vencido", label: "Recompra" },
+  { value: "concluido", label: "Concluído" },
 ];
 
 const eventTypeConfig: Record<
@@ -120,7 +120,7 @@ const eventTypeConfig: Record<
   }
 > = {
   proxima_compra: {
-    label: "Proxima compra",
+    label: "Próxima compra",
     dot: "bg-info-foreground",
     badge: "info",
     chip: "border-info/70 bg-info text-info-foreground",
@@ -208,6 +208,13 @@ function getMonthLabel(month: string) {
 
 function getDateLabel(date: string) {
   return dateFormatter.format(parseDate(date));
+}
+
+function normalizeLabel(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function getWeekStart(date: string) {
@@ -305,7 +312,7 @@ function applyRuntimeState(
       date,
       type: "follow_up",
       title: getEventTitle("follow_up"),
-      statusLabel: "Concluido",
+      statusLabel: "Concluído",
       canReschedule: false,
       canComplete: false,
     };
@@ -446,7 +453,7 @@ function buildLocalCalendarEvents({
           description:
             baseType === "visita"
               ? "Visita comercial encaminhada"
-              : "Proxima compra ou retorno previsto",
+              : "Próxima compra ou retorno previsto",
           statusLabel:
             baseType === "follow_up" && date < TODAY
               ? "Em atraso"
@@ -493,19 +500,15 @@ function eventMatchesStatus(event: CalendarEvent, status: StatusFilter) {
   }
 
   if (status === "aberto") {
-    return event.statusLabel.toLowerCase() === "aberto";
+    return normalizeLabel(event.statusLabel) === "aberto";
   }
 
   if (status === "concluido") {
-    return event.statusLabel.toLowerCase() === "concluido";
+    return normalizeLabel(event.statusLabel) === "concluido";
   }
 
   if (status === "vencido") {
-    return (
-      event.type === "vencido" ||
-      event.statusLabel.toLowerCase() === "recompra" ||
-      event.statusLabel.toLowerCase() === "em atraso"
-    );
+    return event.type === "vencido" || normalizeLabel(event.statusLabel) === "recompra";
   }
 
   return event.client.status === status;
@@ -1078,7 +1081,7 @@ export function CalendarioView({
               ? {
                   ...calendarEvent,
                   type: "follow_up",
-                  statusLabel: "Concluido",
+                  statusLabel: "Concluído",
                   canComplete: false,
                   canReschedule: false,
                 }
@@ -1276,7 +1279,7 @@ export function CalendarioView({
                 type="button"
                 variant="outline"
                 size="icon"
-                aria-label="Periodo anterior"
+                aria-label="Período anterior"
                 onClick={goToPrevious}
               >
                 <ChevronLeft className="h-4 w-4" />
