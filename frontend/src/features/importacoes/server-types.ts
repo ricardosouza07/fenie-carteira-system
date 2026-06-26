@@ -23,6 +23,10 @@ export type PublishSupabaseImportResult =
       updatedCustomers: number;
       createdSalespeople: number;
       portfolioItems: number;
+      matchedByPhone: number;
+      matchedByDocument: number;
+      matchedByLegalName: number;
+      matchedByTradeNameCity: number;
       message: string;
     }
   | {

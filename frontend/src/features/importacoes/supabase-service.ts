@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getAuthenticatedSupabaseClient } from "@/features/auth/access";
+import type { WorkStatus } from "@/features/carteira/types";
 import { createOptionalSupabaseServiceClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/types";
 
@@ -19,11 +20,35 @@ type SalespersonEntry = {
   name: string;
 };
 
+type CustomerMatchStrategy =
+  | "telefone"
+  | "documento"
+  | "razao_social"
+  | "nome_fantasia_cidade"
+  | "novo";
+
+type CustomerMatch = {
+  id: string;
+  strategy: CustomerMatchStrategy;
+  workStatus: WorkStatus;
+};
+
+type CustomerUpsertResult = {
+  customerId: string;
+  created: boolean;
+  workStatus: WorkStatus;
+  matchStrategy: CustomerMatchStrategy;
+};
+
 type PublishStats = {
   createdCustomers: number;
   updatedCustomers: number;
   createdSalespeople: number;
   portfolioItems: number;
+  matchedByPhone: number;
+  matchedByDocument: number;
+  matchedByLegalName: number;
+  matchedByTradeNameCity: number;
 };
 
 const IMPORT_BATCH_SIZE = 500;
@@ -51,6 +76,16 @@ function nonEmpty(value: string) {
   const trimmed = value.trim();
 
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeWorkStatus(value: unknown): WorkStatus {
+  return value === "contatado" ||
+    value === "aguardando" ||
+    value === "convertido" ||
+    value === "visita" ||
+    value === "nao_trabalhado"
+    ? value
+    : "nao_trabalhado";
 }
 
 function toJson(value: unknown): Json {
@@ -205,7 +240,36 @@ async function resolveSalesperson(
 async function findCustomerId(
   client: SupabaseServiceClient,
   row: ImportPreviewRow,
-) {
+): Promise<CustomerMatch | null> {
+  async function loadCustomerMatch(
+    customerId: unknown,
+    strategy: CustomerMatchStrategy,
+  ): Promise<CustomerMatch | null> {
+    if (typeof customerId !== "string" || !customerId) {
+      return null;
+    }
+
+    const customer = await expectNoError(
+      client
+        .from("customers")
+        .select("id,work_status")
+        .eq("id", customerId)
+        .limit(1)
+        .maybeSingle(),
+      `Nao foi possivel carregar cliente cruzado da linha ${row.rowNumber}`,
+    );
+
+    if (!customer?.id) {
+      return null;
+    }
+
+    return {
+      id: String(customer.id),
+      strategy,
+      workStatus: normalizeWorkStatus(customer.work_status),
+    };
+  }
+
   const phones =
     row.telefonesNormalizados.length > 0
       ? row.telefonesNormalizados
@@ -222,13 +286,17 @@ async function findCustomerId(
     );
 
     if (contacts[0]?.customer_id) {
-      return String(contacts[0].customer_id);
+      const match = await loadCustomerMatch(contacts[0].customer_id, "telefone");
+
+      if (match) {
+        return match;
+      }
     }
 
     const data = await expectNoError(
       client
         .from("customers")
-        .select("id")
+        .select("id,work_status")
         .in("phone_normalized", phones)
         .limit(1),
       `Nao foi possivel consultar cliente pelo telefone da linha ${row.rowNumber}`,
@@ -237,7 +305,11 @@ async function findCustomerId(
     const first = data[0];
 
     if (first?.id) {
-      return String(first.id);
+      return {
+        id: String(first.id),
+        strategy: "telefone",
+        workStatus: normalizeWorkStatus(first.work_status),
+      };
     }
   }
 
@@ -245,14 +317,18 @@ async function findCustomerId(
     const data = await expectNoError(
       client
         .from("customers")
-        .select("id")
+        .select("id,work_status")
         .eq("document_normalized", row.documentoNormalizado)
         .limit(1),
       `Nao foi possivel consultar cliente pelo documento da linha ${row.rowNumber}`,
     );
 
     if (data[0]?.id) {
-      return String(data[0].id);
+      return {
+        id: String(data[0].id),
+        strategy: "documento",
+        workStatus: normalizeWorkStatus(data[0].work_status),
+      };
     }
   }
 
@@ -260,14 +336,18 @@ async function findCustomerId(
     const data = await expectNoError(
       client
         .from("customers")
-        .select("id")
+        .select("id,work_status")
         .eq("legal_name_normalized", row.razaoSocialNormalizada)
         .limit(1),
       `Nao foi possivel consultar cliente pela razao social da linha ${row.rowNumber}`,
     );
 
     if (data[0]?.id) {
-      return String(data[0].id);
+      return {
+        id: String(data[0].id),
+        strategy: "razao_social",
+        workStatus: normalizeWorkStatus(data[0].work_status),
+      };
     }
   }
 
@@ -275,7 +355,7 @@ async function findCustomerId(
     const data = await expectNoError(
       client
         .from("customers")
-        .select("id")
+        .select("id,work_status")
         .eq("trade_name_normalized", row.nomeFantasiaNormalizado)
         .eq("city_normalized", row.cidadeNormalizada)
         .limit(1),
@@ -283,7 +363,11 @@ async function findCustomerId(
     );
 
     if (data[0]?.id) {
-      return String(data[0].id);
+      return {
+        id: String(data[0].id),
+        strategy: "nome_fantasia_cidade",
+        workStatus: normalizeWorkStatus(data[0].work_status),
+      };
     }
   }
 
@@ -295,8 +379,8 @@ async function upsertCustomer(
   importId: string,
   row: ImportPreviewRow,
   salesperson: SalespersonEntry | null,
-) {
-  const existingId = await findCustomerId(client, row);
+): Promise<CustomerUpsertResult> {
+  const existingMatch = await findCustomerId(client, row);
   const customerPayload = {
     legal_name: nonEmpty(row.razaoSocial),
     trade_name: nonEmpty(row.nomeFantasia || row.cliente),
@@ -336,13 +420,18 @@ async function upsertCustomer(
     active: true,
   };
 
-  if (existingId) {
+  if (existingMatch) {
     await expectNoError(
-      client.from("customers").update(customerPayload).eq("id", existingId),
+      client.from("customers").update(customerPayload).eq("id", existingMatch.id),
       `Nao foi possivel atualizar cliente da linha ${row.rowNumber}`,
     );
 
-    return { customerId: existingId, created: false };
+    return {
+      customerId: existingMatch.id,
+      created: false,
+      workStatus: existingMatch.workStatus,
+      matchStrategy: existingMatch.strategy,
+    };
   }
 
   const created = await expectNoError(
@@ -360,7 +449,12 @@ async function upsertCustomer(
     `Nao foi possivel criar cliente da linha ${row.rowNumber}`,
   );
 
-  return { customerId: String(created.id), created: true };
+  return {
+    customerId: String(created.id),
+    created: true,
+    workStatus: "nao_trabalhado",
+    matchStrategy: "novo",
+  };
 }
 
 async function ensureCustomerContacts(
@@ -417,12 +511,14 @@ async function saveImportRows(
   client: SupabaseServiceClient,
   importId: string,
   rows: ImportPreviewRow[],
+  customerIdsByRowNumber: Map<number, string>,
 ) {
   const payload = rows.map((row) => ({
     import_id: importId,
     row_number: row.rowNumber,
     raw_data: toJson({}),
     normalized_data: toJson(row),
+    customer_id: customerIdsByRowNumber.get(row.rowNumber) ?? null,
     is_valid: row.isValid,
     invalid_reasons: row.invalidReasons,
     duplicate_key: row.duplicateKey,
@@ -442,6 +538,7 @@ async function savePortfolioItems(
   items: Array<{
     customerId: string;
     salespersonId: string | null;
+    workStatus: WorkStatus;
     row: ImportPreviewRow;
   }>,
 ) {
@@ -463,7 +560,7 @@ async function savePortfolioItems(
     customer_id: item.customerId,
     salesperson_id: item.salespersonId,
     health_status: item.row.nivel,
-    work_status: "nao_trabalhado",
+    work_status: item.workStatus,
     days_without_buying: item.row.diasSemComprar,
     next_purchase_date: item.row.proximaCompra,
     last_order_date: item.row.ultimoPedido,
@@ -563,6 +660,10 @@ export async function publishSupabaseImport(
     updatedCustomers: 0,
     createdSalespeople: 0,
     portfolioItems: 0,
+    matchedByPhone: 0,
+    matchedByDocument: 0,
+    matchedByLegalName: 0,
+    matchedByTradeNameCity: 0,
   };
 
   try {
@@ -595,13 +696,13 @@ export async function publishSupabaseImport(
 
     importId = String(createdImport.id);
 
-    await saveImportRows(client, importId, input.result.rows);
-
     const validRows = input.result.rows.filter((row) => row.isValid);
     const salespeopleByName = await loadSalespeople(client);
+    const customerIdsByRowNumber = new Map<number, string>();
     const portfolioItems: Array<{
       customerId: string;
       salespersonId: string | null;
+      workStatus: WorkStatus;
       row: ImportPreviewRow;
     }> = [];
 
@@ -622,16 +723,36 @@ export async function publishSupabaseImport(
         stats.createdCustomers += 1;
       } else {
         stats.updatedCustomers += 1;
+
+        if (customer.matchStrategy === "telefone") {
+          stats.matchedByPhone += 1;
+        } else if (customer.matchStrategy === "documento") {
+          stats.matchedByDocument += 1;
+        } else if (customer.matchStrategy === "razao_social") {
+          stats.matchedByLegalName += 1;
+        } else if (customer.matchStrategy === "nome_fantasia_cidade") {
+          stats.matchedByTradeNameCity += 1;
+        }
       }
 
       await ensureCustomerContacts(client, customer.customerId, row);
 
+      customerIdsByRowNumber.set(row.rowNumber, customer.customerId);
+
       portfolioItems.push({
         customerId: customer.customerId,
         salespersonId: salesperson?.id ?? null,
+        workStatus: customer.workStatus,
         row,
       });
     }
+
+    await saveImportRows(
+      client,
+      importId,
+      input.result.rows,
+      customerIdsByRowNumber,
+    );
 
     stats.portfolioItems = await savePortfolioItems(
       client,
@@ -663,9 +784,10 @@ export async function publishSupabaseImport(
     return {
       status: "published",
       record: mapImportRecord(published),
-      publishedClients: validRows.length,
+      publishedClients: stats.portfolioItems,
       ...stats,
-      message: "Importacao publicada no Supabase com sucesso.",
+      message:
+        "Importacao mensal publicada no Supabase com historico operacional preservado.",
     };
   } catch (error) {
     const message =

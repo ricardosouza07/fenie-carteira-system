@@ -844,7 +844,7 @@ export function ImportacoesView() {
         setPublishedCount(response.publishedClients);
         setPublishMode("supabase");
         setPublishMessage(
-          `${response.message} ${response.portfolioItems} itens de carteira foram criados.`,
+          `${response.message} ${response.portfolioItems} clientes únicos ficaram na carteira atual. ${response.createdCustomers} novos, ${response.updatedCustomers} cruzados com histórico existente.`,
         );
         setActiveImport((current) =>
           current ? { ...current, record: response.record } : current,
@@ -1073,7 +1073,7 @@ export function ImportacoesView() {
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {publishMode === "supabase"
-                        ? `${publishedCount} linhas válidas foram gravadas no banco. Clientes duplicados são consolidados na Carteira.`
+                        ? `${publishedCount} clientes únicos foram publicados na carteira atual. Clientes duplicados são consolidados e clientes ausentes ficam apenas no histórico.`
                         : `${publishedCount} linhas válidas foram salvas no navegador para manter o fluxo operacional.`}
                     </p>
                     {publishMessage ? (

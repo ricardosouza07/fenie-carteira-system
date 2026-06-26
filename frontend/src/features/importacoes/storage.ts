@@ -101,35 +101,62 @@ function normalizeText(value: string) {
 }
 
 function normalizePhone(value: string) {
-  return value.replace(/\D/g, "");
+  let digits = value.replace(/\D/g, "");
+
+  if (digits.startsWith("55") && digits.length > 11) {
+    digits = digits.slice(2);
+  }
+
+  return digits;
 }
 
-function financialIdentityKeys(client: CarteiraClient) {
+function normalizeDocument(value: string | undefined) {
+  return (value ?? "").replace(/\D/g, "");
+}
+
+function identityKeys(client: CarteiraClient) {
   const phone = normalizePhone(client.telefone);
+  const document = normalizeDocument(client.documento);
+  const legalName = normalizeText(client.razaoSocial ?? "");
   const nameCity = normalizeText(`${client.cliente} ${client.cidade}`);
   const tradeCity = normalizeText(
     `${client.nomeFantasia ?? client.razaoSocial ?? ""} ${client.cidade}`,
   );
 
-  return [phone ? `phone:${phone}` : null, `name:${nameCity}`, `trade:${tradeCity}`]
-    .filter((key): key is string => Boolean(key && key.length > 6));
+  return [
+    phone ? `phone:${phone}` : null,
+    document.length >= 11 ? `document:${document}` : null,
+    legalName.length >= 3 ? `legal:${legalName}` : null,
+    nameCity.length >= 6 ? `name:${nameCity}` : null,
+    tradeCity.length >= 6 ? `trade:${tradeCity}` : null,
+  ].filter((key): key is string => Boolean(key));
 }
 
-function buildFinancialSnapshot(clients: CarteiraClient[]) {
+function buildOperationalSnapshot(clients: CarteiraClient[]) {
   const snapshot = new Map<
     string,
-    Pick<CarteiraClient, "situacaoFinanceira" | "observacaoFinanceira">
+    Pick<
+      CarteiraClient,
+      | "situacaoFinanceira"
+      | "observacaoFinanceira"
+      | "status"
+      | "ultimaAcao"
+      | "interacoes"
+    >
   >();
 
   for (const client of clients) {
-    const financialData = {
+    const operationalData = {
       situacaoFinanceira: normalizeFinancialStatus(client.situacaoFinanceira),
       observacaoFinanceira: client.observacaoFinanceira ?? null,
+      status: client.status,
+      ultimaAcao: client.ultimaAcao,
+      interacoes: client.interacoes,
     };
 
-    financialIdentityKeys(client).forEach((key) => {
+    identityKeys(client).forEach((key) => {
       if (!snapshot.has(key)) {
-        snapshot.set(key, financialData);
+        snapshot.set(key, operationalData);
       }
     });
   }
@@ -137,14 +164,21 @@ function buildFinancialSnapshot(clients: CarteiraClient[]) {
   return snapshot;
 }
 
-function preserveFinancialData(
+function preserveOperationalData(
   client: CarteiraClient,
   snapshot: Map<
     string,
-    Pick<CarteiraClient, "situacaoFinanceira" | "observacaoFinanceira">
+    Pick<
+      CarteiraClient,
+      | "situacaoFinanceira"
+      | "observacaoFinanceira"
+      | "status"
+      | "ultimaAcao"
+      | "interacoes"
+    >
   >,
 ) {
-  const previous = financialIdentityKeys(client)
+  const previous = identityKeys(client)
     .map((key) => snapshot.get(key))
     .find(Boolean);
 
@@ -153,6 +187,9 @@ function preserveFinancialData(
         ...client,
         situacaoFinanceira: previous.situacaoFinanceira,
         observacaoFinanceira: previous.observacaoFinanceira ?? null,
+        status: previous.status,
+        ultimaAcao: previous.ultimaAcao,
+        interacoes: previous.interacoes,
       }
     : client;
 }
@@ -173,9 +210,11 @@ export function savePublishedImportClients(
   importId: string,
   clients: CarteiraClient[],
 ) {
-  const previousFinancialData = buildFinancialSnapshot(getPublishedImportClients());
+  const previousOperationalData = buildOperationalSnapshot(
+    getPublishedImportClients(),
+  );
   const nextClients = clients.map((client) => ({
-    ...preserveFinancialData(client, previousFinancialData),
+    ...preserveOperationalData(client, previousOperationalData),
     id: client.id.startsWith(`${importId}-`)
       ? client.id
       : `${importId}-${client.id}`,
