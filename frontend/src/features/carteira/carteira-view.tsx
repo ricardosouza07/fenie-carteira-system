@@ -269,7 +269,7 @@ function readFinancialQuery(value: string | null): "todas" | FinancialStatus {
 }
 
 function readNextPurchaseQuery(value: string | null): NextPurchaseFilter {
-  if (value === "vencidas") {
+  if (value === "vencidas" || value === "vencidos") {
     return "recompra";
   }
 
@@ -279,7 +279,7 @@ function readNextPurchaseQuery(value: string | null): NextPurchaseFilter {
 }
 
 function readQuickFilterQuery(value: string | null): QuickFilter {
-  if (value === "vencidos") {
+  if (value === "vencidas" || value === "vencidos") {
     return "recompra";
   }
 

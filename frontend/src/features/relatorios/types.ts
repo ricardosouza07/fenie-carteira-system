@@ -32,7 +32,7 @@ export type SellerPerformanceRow = {
   visitas: number;
   valorRecuperado: number;
   pendencias: number;
-  followUpsVencidos: number;
+  followUpsEmAtraso: number;
   pontos: number;
 };
 

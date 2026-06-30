@@ -459,7 +459,7 @@ function createSellerAccumulator(vendedor: string): SellerAccumulator {
     visitas: 0,
     valorRecuperado: 0,
     pendencias: 0,
-    followUpsVencidos: 0,
+    followUpsEmAtraso: 0,
     pontos: 0,
     workedCustomerIds: new Set<string>(),
     convertedCustomerIds: new Set<string>(),
@@ -538,7 +538,7 @@ function buildSellerRows(input: {
     const key = getSellerKey({ row: followUp, client, salespeopleById });
     const current = getAccumulator(key.id, key.name);
 
-    current.followUpsVencidos += 1;
+    current.followUpsEmAtraso += 1;
   }
 
   for (const event of pointEvents) {
@@ -564,8 +564,8 @@ function buildSellerRows(input: {
           trabalhados > 0 ? Math.round((convertidos / trabalhados) * 100) : 0,
         visitas: seller.visitCustomerIds.size,
         valorRecuperado: seller.valorRecuperado,
-        pendencias: seller.pendencias + seller.followUpsVencidos,
-        followUpsVencidos: seller.followUpsVencidos,
+        pendencias: seller.pendencias + seller.followUpsEmAtraso,
+        followUpsEmAtraso: seller.followUpsEmAtraso,
         pontos: seller.pontos,
       };
     })
@@ -627,7 +627,7 @@ function buildMetrics(input: {
       ),
       clients.filter((client) => client.status === "visita").length,
     ),
-    followUpsVencidos: followUps.filter(isFollowUpOverdue).length,
+    followUpsEmAtraso: followUps.filter(isFollowUpOverdue).length,
     followUpsHoje: followUps.filter(isFollowUpToday).length,
     contatosRealizados: interactions.length,
     pontosMes: pointEvents.reduce(

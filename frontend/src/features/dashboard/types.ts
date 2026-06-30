@@ -20,7 +20,7 @@ export type DashboardMetrics = {
   valorRecuperado: number;
   aguardandoRetorno: number;
   visitasEncaminhadas: number;
-  followUpsVencidos: number;
+  followUpsEmAtraso: number;
   followUpsHoje: number;
   contatosRealizados: number;
   pontosMes: number;
@@ -38,7 +38,7 @@ export type DashboardSellerPerformance = {
   visitas: number;
   valorRecuperado: number;
   pendencias: number;
-  followUpsVencidos: number;
+  followUpsEmAtraso: number;
   pontos: number;
 };
 

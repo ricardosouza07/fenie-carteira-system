@@ -357,7 +357,7 @@ function buildSellerRows(
       visitas: 0,
       valorRecuperado: 0,
       pendencias: 0,
-      followUpsVencidos: 0,
+      followUpsEmAtraso: 0,
       pontos: 0,
     };
 
@@ -380,7 +380,7 @@ function buildSellerRows(
     }
 
     if (isFollowUpOverdue(client)) {
-      current.followUpsVencidos += 1;
+      current.followUpsEmAtraso += 1;
     }
 
     sellers.set(client.vendedor, current);
@@ -809,7 +809,7 @@ function SellerPerformanceTable({ rows }: { rows: SellerPerformance[] }) {
                 <span className="text-right font-medium text-foreground">
                   {formatCurrency(row.valorRecuperado)}
                 </span>
-                <span>Follow-ups em atraso: {row.followUpsVencidos}</span>
+                <span>Follow-ups em atraso: {row.followUpsEmAtraso}</span>
                 <span className="text-right">Pontos: {row.pontos}</span>
               </div>
             </Link>
@@ -862,7 +862,7 @@ function SellerPerformanceTable({ rows }: { rows: SellerPerformance[] }) {
                     {formatCurrency(row.valorRecuperado)}
                   </TableCell>
                   <TableCell className="text-right font-mono">
-                    {row.followUpsVencidos}
+                    {row.followUpsEmAtraso}
                   </TableCell>
                   <TableCell className="text-right font-mono font-semibold text-primary">
                     {row.pontos}
@@ -1103,7 +1103,7 @@ export function DashboardView({
       valorRecuperado: recoveredValue,
       aguardandoRetorno: awaitingClients.length,
       visitasEncaminhadas: visitsClients.length,
-      followUpsVencidos: followUpsOverdue.length,
+      followUpsEmAtraso: followUpsOverdue.length,
       followUpsHoje: followUpsToday.length,
       contatosRealizados: workedClients.length,
       pontosMes: gamificationSummary.totalPoints,
@@ -1200,7 +1200,7 @@ export function DashboardView({
         },
         {
           label: "Follow-ups em atraso",
-          value: String(metrics.followUpsVencidos),
+          value: String(metrics.followUpsEmAtraso),
           hint: "Tarefas com prazo vencido",
           description: "Follow-ups ou tarefas comerciais com prazo anterior a hoje.",
           href: "/agenda",

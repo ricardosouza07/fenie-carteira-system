@@ -509,7 +509,7 @@ function buildSellerPerformanceRows(input: {
       visitas: 0,
       valorRecuperado: 0,
       pendencias: 0,
-      followUpsVencidos: 0,
+      followUpsEmAtraso: 0,
       pontos: 0,
     };
 
@@ -547,7 +547,7 @@ function buildSellerPerformanceRows(input: {
     const seller = ensureSeller(row.client.vendedor);
 
     if (row.situacao === "Em atraso") {
-      seller.followUpsVencidos += 1;
+      seller.followUpsEmAtraso += 1;
       seller.pendencias += 1;
     }
   });
@@ -1030,7 +1030,7 @@ function SellerPerformanceTable({
             <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
               <span>Taxa: {formatPercent(row.taxaConversao)}</span>
               <span>Visitas: {row.visitas}</span>
-              <span>Em atraso: {row.followUpsVencidos}</span>
+              <span>Em atraso: {row.followUpsEmAtraso}</span>
               <span>Pontos: {row.pontos}</span>
               <span className="col-span-2 font-medium text-foreground">
                 {formatCurrency(row.valorRecuperado)}
@@ -1074,7 +1074,7 @@ function SellerPerformanceTable({
                   {formatCurrency(row.valorRecuperado)}
                 </TableCell>
                 <TableCell className="text-right font-mono">
-                  {row.followUpsVencidos}
+                  {row.followUpsEmAtraso}
                 </TableCell>
                 <TableCell className="text-right font-mono font-semibold text-primary">
                   {row.pontos}
