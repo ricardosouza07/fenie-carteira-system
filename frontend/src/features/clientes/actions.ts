@@ -3,8 +3,12 @@
 import {
   loadClienteDetailFromSupabase,
   updateClienteFinancialStatus,
+  updateClientePortfolioStatus,
 } from "./supabase-service";
-import type { FinancialStatus } from "@/features/carteira/types";
+import type {
+  FinancialStatus,
+  PortfolioStatus,
+} from "@/features/carteira/types";
 import type { LoadClienteDetailResult } from "./types";
 
 export async function loadClienteDetailFromSupabaseAction(
@@ -19,4 +23,12 @@ export async function updateClienteFinancialStatusAction(input: {
   observacaoFinanceira: string | null;
 }) {
   return updateClienteFinancialStatus(input);
+}
+
+export async function updateClientePortfolioStatusAction(input: {
+  customerId: string;
+  situacaoCarteira: PortfolioStatus;
+  observacaoCarteira: string | null;
+}) {
+  return updateClientePortfolioStatus(input);
 }

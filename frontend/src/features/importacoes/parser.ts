@@ -496,6 +496,8 @@ function buildClient(importId: string, row: ImportPreviewRow): CarteiraClient {
     dataTarefa: row.dataTarefa,
     situacaoFinanceira: "adimplente",
     observacaoFinanceira: null,
+    situacaoCarteira: "ativo",
+    observacaoCarteira: null,
     status: "nao_trabalhado",
     ultimaAcao: { tipo: "Importado da planilha", data: null },
   };

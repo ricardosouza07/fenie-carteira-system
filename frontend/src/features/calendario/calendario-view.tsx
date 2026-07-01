@@ -50,6 +50,7 @@ import {
   getOperationalClientLevel,
   isClientConverted,
 } from "@/features/carteira/operational-rules";
+import { isClientInActivePortfolio } from "@/features/carteira/portfolio-status";
 import { useGamification } from "@/features/gamification/gamification-provider";
 import { getCurrentPeriod } from "@/lib/current-period";
 import { cn } from "@/lib/utils";
@@ -866,9 +867,10 @@ export function CalendarioView({
   const { awardInteractionPoints } = useGamification();
   const isSupabaseAvailable = initialCalendario.status === "available";
   const [clients, setClients] = useState<CarteiraClient[]>(() =>
-    isSupabaseAvailable
+    (isSupabaseAvailable
       ? initialCalendario.clients
-      : getCarteiraClientsWithPublishedImports(),
+      : getCarteiraClientsWithPublishedImports()
+    ).filter(isClientInActivePortfolio),
   );
   const [supabaseEvents, setSupabaseEvents] = useState<CalendarEvent[]>(
     () => initialCalendario.events,

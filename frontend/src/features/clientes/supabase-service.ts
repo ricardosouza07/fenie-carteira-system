@@ -7,10 +7,12 @@ import type {
   ContactChannel,
   ContactStatus,
   FinancialStatus,
+  PortfolioStatus,
   WorkStatus,
 } from "@/features/carteira/types";
 import { calculateClientHealthStatus } from "@/features/carteira/operational-rules";
 import { normalizeFinancialStatus } from "@/features/carteira/financial-status";
+import { normalizePortfolioStatus } from "@/features/carteira/portfolio-status";
 import { getCurrentPeriod } from "@/lib/current-period";
 
 import type {
@@ -277,6 +279,8 @@ function normalizeClient(input: {
     dataTarefa: dateOnly(customer.task_date),
     situacaoFinanceira: normalizeFinancialStatus(customer.financial_status),
     observacaoFinanceira: stringOrNull(customer.financial_note),
+    situacaoCarteira: normalizePortfolioStatus(customer.portfolio_status),
+    observacaoCarteira: stringOrNull(customer.portfolio_status_note),
     status:
       interaction?.status ?? workStatus(item?.work_status ?? customer.work_status),
     ultimaAcao: buildLastAction(customer, latestInteraction),
@@ -475,6 +479,18 @@ export type UpdateClienteFinancialStatusResult =
       message: string;
     };
 
+export type UpdateClientePortfolioStatusResult =
+  | {
+      status: "success";
+      situacaoCarteira: PortfolioStatus;
+      observacaoCarteira: string | null;
+      message?: string;
+    }
+  | {
+      status: "local_fallback" | "error";
+      message: string;
+    };
+
 export async function updateClienteFinancialStatus(input: {
   customerId: string;
   situacaoFinanceira: FinancialStatus;
@@ -528,6 +544,63 @@ export async function updateClienteFinancialStatus(input: {
         error instanceof Error
           ? error.message
           : "Não foi possível atualizar a situação financeira.",
+    };
+  }
+}
+
+export async function updateClientePortfolioStatus(input: {
+  customerId: string;
+  situacaoCarteira: PortfolioStatus;
+  observacaoCarteira: string | null;
+}): Promise<UpdateClientePortfolioStatusResult> {
+  const access = await getAuthenticatedSupabaseClient();
+  const client = access.client as SupabaseServiceClient | null;
+
+  if (!client) {
+    return {
+      status: "local_fallback",
+      message:
+        access.message ??
+        "Supabase ainda não está configurado. A situação da carteira foi mantida apenas localmente.",
+    };
+  }
+
+  if (!isUuid(input.customerId)) {
+    return {
+      status: "local_fallback",
+      message:
+        "Este cliente ainda não possui ID real do Supabase. A situação da carteira foi mantida apenas localmente.",
+    };
+  }
+
+  try {
+    const status = normalizePortfolioStatus(input.situacaoCarteira);
+    const note = stringOrNull(input.observacaoCarteira);
+
+    await expectNoError(
+      client
+        .from("customers")
+        .update({
+          portfolio_status: status,
+          portfolio_status_note: note,
+        })
+        .eq("id", input.customerId),
+      "Não foi possível atualizar a situação da carteira do cliente",
+    );
+
+    return {
+      status: "success",
+      situacaoCarteira: status,
+      observacaoCarteira: note,
+      message: "Situação da carteira atualizada.",
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar a situação da carteira.",
     };
   }
 }

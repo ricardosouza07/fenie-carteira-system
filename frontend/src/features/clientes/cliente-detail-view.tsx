@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { saveInteractionToSupabaseAction } from "@/features/carteira/actions";
 import {
   loadClienteDetailFromSupabaseAction,
+  updateClientePortfolioStatusAction,
   updateClienteFinancialStatusAction,
 } from "@/features/clientes/actions";
 import {
@@ -44,6 +45,7 @@ import type {
   ContactChannel,
   ContactStatus,
   FinancialStatus,
+  PortfolioStatus,
 } from "@/features/carteira/types";
 import {
   FINANCIAL_RESTRICTION_MESSAGE,
@@ -51,6 +53,13 @@ import {
   getClientFinancialStatus,
   hasFinancialRestriction,
 } from "@/features/carteira/financial-status";
+import {
+  getClientPortfolioStatus,
+  getPortfolioStatusAlertMessage,
+  isClientInActivePortfolio,
+  portfolioStatusEditOptions,
+} from "@/features/carteira/portfolio-status";
+import { PortfolioStatusBadge } from "@/features/carteira/portfolio-status-badge";
 import {
   getOperationalClientLevel,
   isClientConverted,
@@ -348,6 +357,8 @@ type FinancialSaveFeedback = {
   message: string;
 };
 
+type PortfolioSaveFeedback = FinancialSaveFeedback;
+
 function FinancialStatusCard({
   client,
   onSave,
@@ -421,6 +432,113 @@ function FinancialStatusCard({
               value={note}
               onChange={(event) => setNote(event.target.value)}
               placeholder="Pendência, negociação, orientação do financeiro ou observação interna"
+              maxLength={420}
+              className="min-h-9 lg:min-h-9"
+            />
+          </div>
+
+          <Button type="submit" disabled={saving}>
+            <Save className="h-4 w-4" />
+            {saving ? "Salvando..." : "Salvar"}
+          </Button>
+        </form>
+
+        {feedback ? (
+          <div
+            className={cn(
+              "mt-3 rounded-md border px-3 py-2 text-sm",
+              feedback.tone === "success" &&
+                "border-success/60 bg-success/35 text-success-foreground",
+              feedback.tone === "warning" &&
+                "border-warning/60 bg-warning/35 text-warning-foreground",
+              feedback.tone === "danger" &&
+                "border-danger-soft/70 bg-danger-soft/35 text-danger-soft-foreground",
+            )}
+          >
+            {feedback.message}
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PortfolioStatusCard({
+  client,
+  onSave,
+}: {
+  client: CarteiraClient;
+  onSave: (input: {
+    situacaoCarteira: PortfolioStatus;
+    observacaoCarteira: string | null;
+  }) => Promise<PortfolioSaveFeedback>;
+}) {
+  const [status, setStatus] = useState<PortfolioStatus>(
+    getClientPortfolioStatus(client),
+  );
+  const [note, setNote] = useState(client.observacaoCarteira ?? "");
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<PortfolioSaveFeedback | null>(null);
+  const isActive = status === "ativo";
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+
+    const result = await onSave({
+      situacaoCarteira: status,
+      observacaoCarteira: note.trim() || null,
+    });
+
+    setFeedback(result);
+    setSaving(false);
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <CardTitle>Situação da Carteira</CardTitle>
+        <PortfolioStatusBadge status={status} />
+      </CardHeader>
+      <CardContent>
+        {!isActive ? (
+          <div className="mb-4 rounded-lg border border-warning/70 bg-warning/35 p-3 text-sm text-warning-foreground">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p className="leading-5">{getPortfolioStatusAlertMessage(status)}</p>
+            </div>
+          </div>
+        ) : null}
+
+        <form
+          onSubmit={handleSubmit}
+          className="grid gap-3 lg:grid-cols-[220px_1fr_auto] lg:items-end"
+        >
+          <div className="space-y-2">
+            <Label htmlFor="portfolio-status">Situação da carteira</Label>
+            <select
+              id="portfolio-status"
+              value={status}
+              onChange={(event) =>
+                setStatus(event.target.value as PortfolioStatus)
+              }
+              className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
+            >
+              {portfolioStatusEditOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="portfolio-note">Observação</Label>
+            <Textarea
+              id="portfolio-note"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Motivo, contexto comercial ou orientação interna"
               maxLength={420}
               className="min-h-9 lg:min-h-9"
             />
@@ -738,6 +856,54 @@ export function ClienteDetailView({
     };
   }
 
+  async function handleSavePortfolioStatus(input: {
+    situacaoCarteira: PortfolioStatus;
+    observacaoCarteira: string | null;
+  }): Promise<PortfolioSaveFeedback> {
+    if (!client) {
+      return {
+        tone: "danger",
+        message: "Cliente não encontrado para atualização da carteira.",
+      };
+    }
+
+    const updatedClient: CarteiraClient = {
+      ...client,
+      situacaoCarteira: input.situacaoCarteira,
+      observacaoCarteira: input.observacaoCarteira,
+    };
+
+    setClientOverride(updatedClient);
+    persistImportedClientUpdate(updatedClient);
+
+    const result = await updateClientePortfolioStatusAction({
+      customerId: client.id,
+      situacaoCarteira: input.situacaoCarteira,
+      observacaoCarteira: input.observacaoCarteira,
+    });
+
+    if (result.status === "success") {
+      const savedClient: CarteiraClient = {
+        ...updatedClient,
+        situacaoCarteira: result.situacaoCarteira,
+        observacaoCarteira: result.observacaoCarteira,
+      };
+
+      setClientOverride(savedClient);
+      persistImportedClientUpdate(savedClient);
+
+      return {
+        tone: "success",
+        message: result.message ?? "Situação da carteira atualizada.",
+      };
+    }
+
+    return {
+      tone: result.status === "local_fallback" ? "warning" : "danger",
+      message: result.message,
+    };
+  }
+
   function dismissPersistenceToast(id: string) {
     setPersistenceToasts((current) =>
       current.filter((toast) => toast.id !== id),
@@ -765,7 +931,9 @@ export function ClienteDetailView({
     );
   }
 
-  const operationalStatus = getOperationalClientLevel(client, TODAY) ?? "convertido";
+  const portfolioStatus = getClientPortfolioStatus(client);
+  const isActivePortfolio = isClientInActivePortfolio(client);
+  const operationalStatus = getOperationalClientLevel(client, TODAY);
 
   return (
     <>
@@ -786,7 +954,17 @@ export function ClienteDetailView({
                 {client.cliente}
               </h1>
               <div className="mt-3 flex flex-wrap gap-2">
-                <StatusBadge status={operationalStatus} />
+                {isActivePortfolio ? (
+                  <StatusBadge
+                    status={
+                      isClientConverted(client, TODAY) || !operationalStatus
+                        ? "convertido"
+                        : operationalStatus
+                    }
+                  />
+                ) : (
+                  <PortfolioStatusBadge status={portfolioStatus} />
+                )}
                 <StatusBadge status={client.status} />
                 <StatusBadge status={getClientFinancialStatus(client)} />
                 <Badge variant="outline">Responsável: {client.vendedor}</Badge>
@@ -834,6 +1012,17 @@ export function ClienteDetailView({
           </div>
         ) : null}
 
+        {!isActivePortfolio ? (
+          <div className="rounded-lg border border-warning/70 bg-warning/35 px-4 py-3 text-sm text-warning-foreground">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p className="leading-5">
+                {getPortfolioStatusAlertMessage(portfolioStatus)}
+              </p>
+            </div>
+          </div>
+        ) : null}
+
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <SummaryCard
             label="Último pedido"
@@ -872,6 +1061,12 @@ export function ClienteDetailView({
           key={`${client.id}-${client.situacaoFinanceira}-${client.observacaoFinanceira ?? ""}`}
           client={client}
           onSave={handleSaveFinancialStatus}
+        />
+
+        <PortfolioStatusCard
+          key={`${client.id}-${client.situacaoCarteira}-${client.observacaoCarteira ?? ""}`}
+          client={client}
+          onSave={handleSavePortfolioStatus}
         />
 
         <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">

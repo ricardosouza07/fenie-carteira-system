@@ -9,6 +9,7 @@ import type {
 } from "@/features/carteira/types";
 import { calculateClientHealthStatus } from "@/features/carteira/operational-rules";
 import { normalizeFinancialStatus } from "@/features/carteira/financial-status";
+import { normalizePortfolioStatus } from "@/features/carteira/portfolio-status";
 import { getCurrentPeriod } from "@/lib/current-period";
 
 import type {
@@ -325,6 +326,8 @@ function normalizeClient(input: {
     dataTarefa: dateOnly(customer.task_date),
     situacaoFinanceira: normalizeFinancialStatus(customer.financial_status),
     observacaoFinanceira: stringOrNull(customer.financial_note),
+    situacaoCarteira: normalizePortfolioStatus(customer.portfolio_status),
+    observacaoCarteira: stringOrNull(customer.portfolio_status_note),
     status: latestStatus ?? workStatus(item.work_status ?? customer.work_status),
     ultimaAcao: latestInteraction
       ? {

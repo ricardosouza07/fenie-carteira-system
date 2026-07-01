@@ -1,5 +1,6 @@
 import type { CarteiraClient } from "@/features/carteira/types";
 import { normalizeFinancialStatus } from "@/features/carteira/financial-status";
+import { normalizePortfolioStatus } from "@/features/carteira/portfolio-status";
 
 import type { ImportRecord } from "./types";
 
@@ -139,6 +140,8 @@ function buildOperationalSnapshot(clients: CarteiraClient[]) {
       CarteiraClient,
       | "situacaoFinanceira"
       | "observacaoFinanceira"
+      | "situacaoCarteira"
+      | "observacaoCarteira"
       | "status"
       | "ultimaAcao"
       | "interacoes"
@@ -149,6 +152,8 @@ function buildOperationalSnapshot(clients: CarteiraClient[]) {
     const operationalData = {
       situacaoFinanceira: normalizeFinancialStatus(client.situacaoFinanceira),
       observacaoFinanceira: client.observacaoFinanceira ?? null,
+      situacaoCarteira: normalizePortfolioStatus(client.situacaoCarteira),
+      observacaoCarteira: client.observacaoCarteira ?? null,
       status: client.status,
       ultimaAcao: client.ultimaAcao,
       interacoes: client.interacoes,
@@ -172,6 +177,8 @@ function preserveOperationalData(
       CarteiraClient,
       | "situacaoFinanceira"
       | "observacaoFinanceira"
+      | "situacaoCarteira"
+      | "observacaoCarteira"
       | "status"
       | "ultimaAcao"
       | "interacoes"
@@ -187,6 +194,8 @@ function preserveOperationalData(
         ...client,
         situacaoFinanceira: previous.situacaoFinanceira,
         observacaoFinanceira: previous.observacaoFinanceira ?? null,
+        situacaoCarteira: previous.situacaoCarteira,
+        observacaoCarteira: previous.observacaoCarteira ?? null,
         status: previous.status,
         ultimaAcao: previous.ultimaAcao,
         interacoes: previous.interacoes,

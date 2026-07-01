@@ -47,6 +47,7 @@ import {
   getOperationalClientLevel,
   isClientConverted,
 } from "@/features/carteira/operational-rules";
+import { isClientInActivePortfolio } from "@/features/carteira/portfolio-status";
 import { addDaysToDateKey, getCurrentPeriod } from "@/lib/current-period";
 import type {
   CarteiraClient,
@@ -494,10 +495,11 @@ function AgendaSourceNotice({ agenda }: { agenda: LoadAgendaResult }) {
 
 export function AgendaView({ initialAgenda }: { initialAgenda: LoadAgendaResult }) {
   const { awardInteractionPoints } = useGamification();
-  const initialClients =
+  const rawInitialClients =
     initialAgenda.clients.length > 0
       ? initialAgenda.clients
       : getCarteiraClientsWithPublishedImports();
+  const initialClients = rawInitialClients.filter(isClientInActivePortfolio);
   const [agendaSource, setAgendaSource] =
     useState<LoadAgendaResult>(initialAgenda);
   const [clients, setClients] = useState<CarteiraClient[]>(initialClients);
@@ -588,7 +590,7 @@ export function AgendaView({ initialAgenda }: { initialAgenda: LoadAgendaResult 
       return;
     }
 
-    setClients(nextAgenda.clients);
+    setClients(nextAgenda.clients.filter(isClientInActivePortfolio));
     setRealAgendaItems(nextAgenda.items);
     setInteractions([]);
     setReschedules({});

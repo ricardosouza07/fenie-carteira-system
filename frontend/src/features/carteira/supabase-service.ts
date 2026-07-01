@@ -4,6 +4,7 @@ import { getAuthenticatedSupabaseClient } from "@/features/auth/access";
 import { calculateClientHealthStatus } from "@/features/carteira/operational-rules";
 
 import { normalizeFinancialStatus } from "./financial-status";
+import { normalizePortfolioStatus } from "./portfolio-status";
 import type {
   LoadCarteiraSupabaseResult,
   CarteiraSupabaseImportInfo,
@@ -345,6 +346,8 @@ function normalizeClient(input: {
     dataTarefa: dateOnly(customer.task_date),
     situacaoFinanceira: normalizeFinancialStatus(customer.financial_status),
     observacaoFinanceira: stringOrNull(customer.financial_note),
+    situacaoCarteira: normalizePortfolioStatus(customer.portfolio_status),
+    observacaoCarteira: stringOrNull(customer.portfolio_status_note),
     status: interaction?.status ?? workStatus(item.work_status ?? customer.work_status),
     ultimaAcao: buildLastAction(customer, latestInteraction, nextFollowUp),
     interacoes: interaction ? [interaction] : undefined,

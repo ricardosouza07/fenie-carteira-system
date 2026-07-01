@@ -42,6 +42,11 @@ import {
   matchesOperationalLevel,
   operationalIndicatorInfo,
 } from "@/features/carteira/operational-rules";
+import {
+  getClientPortfolioStatus,
+  portfolioStatusFilterOptions,
+  type PortfolioStatusFilter,
+} from "@/features/carteira/portfolio-status";
 import { useGamification } from "@/features/gamification/gamification-provider";
 import type { PointEvent } from "@/features/gamification/types";
 import { getCurrentPeriod } from "@/lib/current-period";
@@ -453,11 +458,14 @@ function clientMatchesFilters(
     city: string;
     status: StatusFilter;
     level: LevelFilter;
+    portfolioStatus: PortfolioStatusFilter;
   },
 ) {
   return (
     (filters.vendor === "todos" || client.vendedor === filters.vendor) &&
     (filters.city === "todas" || client.cidade === filters.city) &&
+    (filters.portfolioStatus === "todos" ||
+      getClientPortfolioStatus(client) === filters.portfolioStatus) &&
     (filters.status === "todos" ||
       (filters.status === "convertido"
         ? isClientConverted(client, TODAY)
@@ -474,6 +482,7 @@ function pointMatchesFilters(
     city: string;
     status: StatusFilter;
     level: LevelFilter;
+    portfolioStatus: PortfolioStatusFilter;
   },
 ) {
   if (filters.vendor !== "todos" && row.vendedor !== filters.vendor) {
@@ -484,7 +493,8 @@ function pointMatchesFilters(
     return (
       filters.city === "todas" &&
       filters.status === "todos" &&
-      filters.level === "todas"
+      filters.level === "todas" &&
+      filters.portfolioStatus === "todos"
     );
   }
 
@@ -1250,6 +1260,8 @@ export function RelatoriosView({
   const [city, setCity] = useState("todas");
   const [status, setStatus] = useState<StatusFilter>("todos");
   const [level, setLevel] = useState<LevelFilter>("todas");
+  const [portfolioStatus, setPortfolioStatus] =
+    useState<PortfolioStatusFilter>("ativo");
   const [activeTab, setActiveTab] = useState<ReportTab>("trabalhados");
   const [exportFeedback, setExportFeedback] = useState<string | null>(null);
 
@@ -1317,13 +1329,19 @@ export function RelatoriosView({
   const filteredClients = useMemo(
     () =>
       clients.filter((client) =>
-        clientMatchesFilters(client, { vendor, city, status, level }),
+        clientMatchesFilters(client, {
+          vendor,
+          city,
+          status,
+          level,
+          portfolioStatus,
+        }),
       ),
-    [city, clients, level, status, vendor],
+    [city, clients, level, portfolioStatus, status, vendor],
   );
 
   const report = useMemo(() => {
-    const filters = { vendor, city, status, level };
+    const filters = { vendor, city, status, level, portfolioStatus };
     const workedRows = rawRows.workedRows.filter(
       (row) =>
         isInPeriod(row.dataInteracao, period) &&
@@ -1352,7 +1370,16 @@ export function RelatoriosView({
       followUpRows,
       pointRows,
     });
-  }, [city, filteredClients, level, period, rawRows, status, vendor]);
+  }, [
+    city,
+    filteredClients,
+    level,
+    period,
+    portfolioStatus,
+    rawRows,
+    status,
+    vendor,
+  ]);
 
   const periodLabel = formatPeriod(period);
   const tabCounts: Record<ReportTab, number> = {
@@ -1378,7 +1405,7 @@ export function RelatoriosView({
       <PageHeader
         eyebrow="Fechamento mensal"
         title="Relatorios"
-        description="Consolide o trabalho da equipe por periodo, vendedor, cidade, status e classificacao."
+        description="Consolide o trabalho da equipe por período, vendedor, cidade, status, classificação e situação da carteira."
         actions={
           <Button size="sm" onClick={handleExport}>
             <Download className="h-4 w-4" />
@@ -1393,7 +1420,7 @@ export function RelatoriosView({
       />
 
       <Card className="mb-4">
-        <CardContent className="grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-5">
+        <CardContent className="grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
           <SelectFilter
             label="Período/mês"
             value={period}
@@ -1426,6 +1453,15 @@ export function RelatoriosView({
             options={levelOptions}
             description="Saúde comercial calculada por dias sem comprar. Convertidos recentes não entram em Atenção, Risco, Inativo ou Recompra."
             onChange={(value) => setLevel(value as LevelFilter)}
+          />
+          <SelectFilter
+            label="Situação da carteira"
+            value={portfolioStatus}
+            options={portfolioStatusFilterOptions}
+            description="Por padrão, mostra apenas clientes ativos na operação comercial."
+            onChange={(value) =>
+              setPortfolioStatus(value as PortfolioStatusFilter)
+            }
           />
         </CardContent>
       </Card>

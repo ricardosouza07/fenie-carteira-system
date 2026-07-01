@@ -9,6 +9,10 @@ export type DashboardSourceStatus =
 
 export type DashboardMetrics = {
   totalClientes: number;
+  carteiraAtiva: number;
+  clientesArquivados: number;
+  fecharamSalao: number;
+  foraOperacao: number;
   saudaveis: number;
   atencao: number;
   risco: number;

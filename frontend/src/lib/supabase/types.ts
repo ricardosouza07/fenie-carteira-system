@@ -31,6 +31,13 @@ export type Database = {
         | "inadimplente"
         | "bloqueado"
         | "negociacao";
+      customer_portfolio_status:
+        | "ativo"
+        | "fechou_salao"
+        | "mudou_de_ramo"
+        | "sem_potencial"
+        | "duplicado"
+        | "arquivado";
     };
     Tables: {
       profiles: {
@@ -136,6 +143,8 @@ export type Database = {
           health_status: Database["public"]["Enums"]["customer_health_status"];
           financial_status: Database["public"]["Enums"]["customer_financial_status"];
           financial_note: string | null;
+          portfolio_status: Database["public"]["Enums"]["customer_portfolio_status"];
+          portfolio_status_note: string | null;
           work_status: Database["public"]["Enums"]["work_status"];
           last_action_label: string | null;
           last_action_at: string | null;
@@ -182,6 +191,8 @@ export type Database = {
           health_status?: Database["public"]["Enums"]["customer_health_status"];
           financial_status?: Database["public"]["Enums"]["customer_financial_status"];
           financial_note?: string | null;
+          portfolio_status?: Database["public"]["Enums"]["customer_portfolio_status"];
+          portfolio_status_note?: string | null;
           work_status?: Database["public"]["Enums"]["work_status"];
           last_action_label?: string | null;
           last_action_at?: string | null;

@@ -24,6 +24,8 @@ Sempre que uma regra mudar, este arquivo deve ser atualizado primeiro.
 | Não trabalhado | Cliente sem interação comercial registrada | Ainda não recebeu ação da equipe. |
 | Inadimplente | Pendência financeira marcada pelo escritório | Consultar financeiro antes de negociar. |
 | Bloqueado | Venda bloqueada até liberação financeira | Não negociar nova venda sem liberação. |
+| Carteira ativa | `portfolio_status = ativo` | Cliente entra na operação comercial. |
+| Fora da operação | `portfolio_status <> ativo` | Cliente preservado no histórico, fora dos indicadores operacionais. |
 
 ## Prioridade do convertido
 
@@ -36,6 +38,23 @@ Se o cliente foi convertido nos últimos 30 dias:
 - não aparece como Inativo antigo;
 - não aparece em Recompra;
 - aparece como Convertido.
+
+## Situacao da carteira
+
+Clientes fora da operacao comercial nao entram nos indicadores padrao de produtividade.
+
+Se `portfolio_status` for diferente de `ativo`, o cliente:
+
+- nao aparece na Carteira padrao;
+- nao entra em Atenção;
+- nao entra em Risco;
+- nao entra em Inativo antigo;
+- nao entra em Recompra;
+- nao entra em Não trabalhados;
+- nao entra nas metas operacionais;
+- nao gera prioridade operacional por padrao.
+
+Esses clientes continuam disponiveis por filtro especifico na Carteira e nos Relatorios.
 
 ## Nomes padronizados
 
@@ -51,6 +70,7 @@ Na Carteira:
 No Dashboard:
 
 - Total de clientes
+- Carteira ativa
 - Clientes em atenção
 - Clientes em risco
 - Inativos antigos
@@ -59,6 +79,9 @@ No Dashboard:
 - Inadimplentes
 - Bloqueados
 - Negociações financeiras
+- Clientes arquivados
+- Fecharam salão
+- Fora da operação
 
 ## Alertas operacionais
 
@@ -97,6 +120,9 @@ Cada alerta deve abrir a Carteira com o filtro correspondente sempre que possív
 - Inativos sem ação: `/carteira?classificacao=inativo&status=nao_trabalhado`
 - Recompras pendentes: `/carteira?proxima=recompra`
 - Aguardando retorno: `/carteira?status=aguardando`
+- Clientes arquivados: `/carteira?carteira=arquivado`
+- Fecharam salão: `/carteira?carteira=fechou_salao`
+- Fora da operação: `/carteira?carteira=todos`
 
 ## Observações técnicas
 
@@ -104,3 +130,4 @@ Cada alerta deve abrir a Carteira com o filtro correspondente sempre que possív
 - As telas recalculam a classificação operacional pelo campo `diasSemComprar`.
 - O status técnico `vencido` do banco pode continuar existindo para follow-ups, mas a interface deve exibir `Em atraso`.
 - A próxima compra passada deve ser exibida como `Recompra`.
+- A situação da carteira fica em `customers.portfolio_status` e deve ser preservada entre importações mensais.

@@ -35,6 +35,10 @@ import {
   matchesOperationalLevel,
 } from "@/features/carteira/operational-rules";
 import { normalizeFinancialStatus } from "@/features/carteira/financial-status";
+import {
+  isClientInActivePortfolio,
+  normalizePortfolioStatus,
+} from "@/features/carteira/portfolio-status";
 
 import type {
   DashboardMetrics,
@@ -384,6 +388,8 @@ function normalizeClient(input: {
     dataTarefa: dateOnly(customer.task_date),
     situacaoFinanceira: normalizeFinancialStatus(customer.financial_status),
     observacaoFinanceira: stringOrNull(customer.financial_note),
+    situacaoCarteira: normalizePortfolioStatus(customer.portfolio_status),
+    observacaoCarteira: stringOrNull(customer.portfolio_status_note),
     status: interaction?.status ?? workStatus(item.work_status ?? customer.work_status),
     ultimaAcao: buildLastAction(customer, latestInteraction, nextFollowUp),
     interacoes: interaction ? [interaction] : undefined,
@@ -487,6 +493,10 @@ function buildSellerRows(input: {
   }
 
   for (const client of clients) {
+    if (!isClientInActivePortfolio(client)) {
+      continue;
+    }
+
     const key = getSellerKey({ client, salespeopleById });
     const current = getAccumulator(key.id, key.name);
 
@@ -505,6 +515,11 @@ function buildSellerRows(input: {
   for (const interaction of interactions) {
     const customerId = stringOrNull(interaction.customer_id);
     const client = customerId ? clientsById.get(customerId) : null;
+
+    if (!client || !isClientInActivePortfolio(client)) {
+      continue;
+    }
+
     const key = getSellerKey({ row: interaction, client, salespeopleById });
     const current = getAccumulator(key.id, key.name);
     const status = getInteractionStatus(interaction);
@@ -535,6 +550,11 @@ function buildSellerRows(input: {
 
     const customerId = stringOrNull(followUp.customer_id);
     const client = customerId ? clientsById.get(customerId) : null;
+
+    if (!client || !isClientInActivePortfolio(client)) {
+      continue;
+    }
+
     const key = getSellerKey({ row: followUp, client, salespeopleById });
     const current = getAccumulator(key.id, key.name);
 
@@ -544,6 +564,11 @@ function buildSellerRows(input: {
   for (const event of pointEvents) {
     const customerId = stringOrNull(event.customer_id);
     const client = customerId ? clientsById.get(customerId) : null;
+
+    if (!client || !isClientInActivePortfolio(client)) {
+      continue;
+    }
+
     const key = getSellerKey({ row: event, client, salespeopleById });
     const current = getAccumulator(key.id, key.name);
 
@@ -589,23 +614,46 @@ function buildMetrics(input: {
   pointEvents: Row[];
 }): DashboardMetrics {
   const { clients, interactions, followUps, pointEvents } = input;
-  const convertedInteractions = interactions.filter(
+  const activeClientIds = new Set(
+    clients.filter(isClientInActivePortfolio).map((client) => client.id),
+  );
+  const activeInteractions = interactions.filter((interaction) => {
+    const customerId = stringOrNull(interaction.customer_id);
+
+    return Boolean(customerId && activeClientIds.has(customerId));
+  });
+  const activeFollowUps = followUps.filter((followUp) => {
+    const customerId = stringOrNull(followUp.customer_id);
+
+    return Boolean(customerId && activeClientIds.has(customerId));
+  });
+  const activePointEvents = pointEvents.filter((event) => {
+    const customerId = stringOrNull(event.customer_id);
+
+    return Boolean(customerId && activeClientIds.has(customerId));
+  });
+  const activeClients = clients.filter(isClientInActivePortfolio);
+  const convertedInteractions = activeInteractions.filter(
     (interaction) => getInteractionStatus(interaction) === "convertido",
   );
-  const visitInteractions = interactions.filter(
+  const visitInteractions = activeInteractions.filter(
     (interaction) => getInteractionStatus(interaction) === "visita",
   );
   const operationalCounts = buildOperationalCounts(clients, TODAY);
 
   return {
     totalClientes: operationalCounts.totalClientes,
+    carteiraAtiva: operationalCounts.carteiraAtiva,
+    clientesArquivados: operationalCounts.clientesArquivados,
+    fecharamSalao: operationalCounts.fecharamSalao,
+    foraOperacao: operationalCounts.foraOperacao,
     saudaveis: operationalCounts.saudaveis,
     atencao: operationalCounts.atencao,
     risco: operationalCounts.risco,
     inativosAntigos: operationalCounts.inativosAntigos,
     recomprasPendentes: operationalCounts.recomprasPendentes,
     trabalhadosMes: uniqueCount(
-      interactions.map((interaction) => stringOrNull(interaction.customer_id)),
+      activeInteractions.map((interaction) => stringOrNull(interaction.customer_id)),
     ),
     naoTrabalhados: operationalCounts.naoTrabalhados,
     convertidos: uniqueCount(
@@ -617,7 +665,7 @@ function buildMetrics(input: {
       (total, interaction) => total + numberOrZero(interaction.recovered_value),
       0,
     ),
-    aguardandoRetorno: clients.filter((client) => client.status === "aguardando")
+    aguardandoRetorno: activeClients.filter((client) => client.status === "aguardando")
       .length,
     visitasEncaminhadas: Math.max(
       uniqueCount(
@@ -625,12 +673,12 @@ function buildMetrics(input: {
           stringOrNull(interaction.customer_id),
         ),
       ),
-      clients.filter((client) => client.status === "visita").length,
+      activeClients.filter((client) => client.status === "visita").length,
     ),
-    followUpsEmAtraso: followUps.filter(isFollowUpOverdue).length,
-    followUpsHoje: followUps.filter(isFollowUpToday).length,
-    contatosRealizados: interactions.length,
-    pontosMes: pointEvents.reduce(
+    followUpsEmAtraso: activeFollowUps.filter(isFollowUpOverdue).length,
+    followUpsHoje: activeFollowUps.filter(isFollowUpToday).length,
+    contatosRealizados: activeInteractions.length,
+    pontosMes: activePointEvents.reduce(
       (total, event) => total + integerOrZero(event.points),
       0,
     ),
@@ -654,6 +702,10 @@ function buildPriorityRows(input: {
       const followUps = followUpsByCustomer.get(client.id) ?? [];
       const hasCurrentMonthInteraction = interactionsByCustomer.has(client.id);
       const hasOverdueFollowUp = followUps.some(isFollowUpOverdue);
+
+      if (!isClientInActivePortfolio(client)) {
+        return null;
+      }
 
       if (isClientConverted(client, TODAY)) {
         return null;

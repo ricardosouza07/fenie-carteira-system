@@ -1,7 +1,13 @@
 import type { CarteiraClient } from "./types";
 
 const carteiraClientsBase: Array<
-  Omit<CarteiraClient, "situacaoFinanceira" | "observacaoFinanceira">
+  Omit<
+    CarteiraClient,
+    | "situacaoFinanceira"
+    | "observacaoFinanceira"
+    | "situacaoCarteira"
+    | "observacaoCarteira"
+  >
 > = [
   {
     id: "cli-001",
@@ -665,5 +671,7 @@ export const carteiraClients: CarteiraClient[] = carteiraClientsBase.map(
       mockFinancialStatusById[client.id]?.situacaoFinanceira ?? "adimplente",
     observacaoFinanceira:
       mockFinancialStatusById[client.id]?.observacaoFinanceira ?? null,
+    situacaoCarteira: "ativo",
+    observacaoCarteira: null,
   }),
 );

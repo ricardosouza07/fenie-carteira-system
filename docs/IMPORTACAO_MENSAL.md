@@ -55,9 +55,13 @@ A importacao mensal nunca deve sobrescrever:
 - `customers.last_action_at`
 - `customers.financial_status`
 - `customers.financial_note`
+- `customers.portfolio_status`
+- `customers.portfolio_status_note`
 - historico de clientes e importacoes anteriores
 
 Para clientes existentes, o novo `portfolio_item` da carteira herda o `work_status` preservado do cliente. Assim, um cliente convertido ou aguardando retorno continua com o status operacional correto depois da nova importacao.
+
+Se um cliente estiver fora da operacao comercial (`fechou_salao`, `mudou_de_ramo`, `sem_potencial`, `duplicado` ou `arquivado`), a nova planilha do Mercos pode atualizar os dados comerciais, mas nao deve reativar o cliente automaticamente. A decisao de voltar para `ativo` deve ser manual no detalhe do cliente.
 
 ## Carteira atual
 
@@ -90,6 +94,8 @@ Quando o Supabase nao estiver configurado, o fallback em `localStorage` tambem p
 - interacoes locais;
 - situacao financeira;
 - observacao financeira.
+- situacao da carteira;
+- observacao da situacao da carteira.
 
 O fallback local substitui a lista publicada pela ultima importacao local, simulando a mesma regra da carteira mensal.
 
@@ -101,8 +107,9 @@ O fallback local substitui a lista publicada pela ultima importacao local, simul
 4. Confirmar que o cliente foi cruzado, e nao duplicado.
 5. Confirmar que ultimo pedido, vendedor, dias sem comprar e proxima compra foram atualizados.
 6. Confirmar que interacoes, follow-ups, pontos, status operacional e situacao financeira foram preservados.
-7. Confirmar que um cliente ausente na planilha B nao aparece na Carteira atual.
-8. Confirmar que esse cliente ausente ainda existe no banco para historico.
+7. Confirmar que a situacao da carteira foi preservada e nao voltou para `ativo` automaticamente.
+8. Confirmar que um cliente ausente na planilha B nao aparece na Carteira atual.
+9. Confirmar que esse cliente ausente ainda existe no banco para historico.
 
 ## Arquivos principais
 

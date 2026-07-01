@@ -66,9 +66,17 @@ import {
   getOperationalClientLevel,
   isClientConverted,
   isClientInRecompra,
+  isClientNotWorked,
   matchesOperationalLevel,
   operationalIndicatorInfo,
 } from "./operational-rules";
+import {
+  getClientPortfolioStatus,
+  isClientInActivePortfolio,
+  portfolioStatusFilterOptions,
+  type PortfolioStatusFilter,
+} from "./portfolio-status";
+import { PortfolioStatusBadge } from "./portfolio-status-badge";
 import { InteractionDrawer } from "./interaction-drawer";
 import {
   buildPersistenceToast,
@@ -197,6 +205,16 @@ const financialStatusValues: FinancialStatus[] = [
   "negociacao",
 ];
 
+const portfolioStatusFilterValues: PortfolioStatusFilter[] = [
+  "ativo",
+  "fechou_salao",
+  "mudou_de_ramo",
+  "sem_potencial",
+  "duplicado",
+  "arquivado",
+  "todos",
+];
+
 const nextPurchaseValues: NextPurchaseFilter[] = [
   "todas",
   "recompra",
@@ -266,6 +284,13 @@ function readFinancialQuery(value: string | null): "todas" | FinancialStatus {
   return value && financialStatusValues.includes(value as FinancialStatus)
     ? normalizeFinancialStatus(value)
     : "todas";
+}
+
+function readPortfolioStatusQuery(value: string | null): PortfolioStatusFilter {
+  return value &&
+    portfolioStatusFilterValues.includes(value as PortfolioStatusFilter)
+    ? (value as PortfolioStatusFilter)
+    : "ativo";
 }
 
 function readNextPurchaseQuery(value: string | null): NextPurchaseFilter {
@@ -371,7 +396,7 @@ function matchesQuickFilter(client: CarteiraClient, filter: QuickFilter) {
     case "inativos":
       return matchesOperationalLevel(client, "inativo", TODAY);
     case "nao_trabalhados":
-      return client.status === "nao_trabalhado";
+      return isClientNotWorked(client);
     case "convertidos":
       return isClientConverted(client, TODAY);
     case "recompra":
@@ -650,9 +675,15 @@ function CarteiraColumnCell({
 }) {
   const nextPurchase = getNextPurchaseLabel(client);
   const operationalLevel = getOperationalClientLevel(client, TODAY);
+  const portfolioStatus = getClientPortfolioStatus(client);
+  const isActivePortfolio = isClientInActivePortfolio(client);
 
   switch (columnId) {
     case "nivel":
+      if (!isActivePortfolio) {
+        return <PortfolioStatusBadge status={portfolioStatus} />;
+      }
+
       return isClientConverted(client, TODAY) || !operationalLevel ? (
         <StatusBadge status="convertido" />
       ) : (
@@ -667,6 +698,11 @@ function CarteiraColumnCell({
           {client.nomeFantasia && client.nomeFantasia !== client.cliente ? (
             <div className="truncate text-xs text-muted-foreground">
               {client.nomeFantasia}
+            </div>
+          ) : null}
+          {!isActivePortfolio ? (
+            <div className="mt-1">
+              <PortfolioStatusBadge status={portfolioStatus} />
             </div>
           ) : null}
         </div>
@@ -780,6 +816,8 @@ function CarteiraMobileList({
       {clients.map((client) => {
         const nextPurchase = getNextPurchaseLabel(client);
         const operationalLevel = getOperationalClientLevel(client, TODAY);
+        const portfolioStatus = getClientPortfolioStatus(client);
+        const isActivePortfolio = isClientInActivePortfolio(client);
 
         return (
           <article
@@ -799,6 +837,11 @@ function CarteiraMobileList({
                     {client.cidade} · {client.bairro}
                   </div>
                 ) : null}
+                {!isActivePortfolio ? (
+                  <div className="mt-1">
+                    <PortfolioStatusBadge status={portfolioStatus} />
+                  </div>
+                ) : null}
               </div>
               <div className="shrink-0 text-right">
                 <div className="font-mono text-lg font-semibold">
@@ -813,7 +856,9 @@ function CarteiraMobileList({
             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
               {visibleColumns.has("nivel") ? (
                 <MobileField label="Nível">
-                  {isClientConverted(client, TODAY) || !operationalLevel ? (
+                  {!isActivePortfolio ? (
+                    <PortfolioStatusBadge status={portfolioStatus} />
+                  ) : isClientConverted(client, TODAY) || !operationalLevel ? (
                     <StatusBadge status="convertido" />
                   ) : (
                     <StatusBadge status={operationalLevel} />
@@ -999,6 +1044,9 @@ export function CarteiraView() {
   const [financialStatus, setFinancialStatus] = useState<
     "todas" | FinancialStatus
   >(() => readFinancialQuery(searchParams.get("financeiro")));
+  const [portfolioStatus, setPortfolioStatus] = useState<PortfolioStatusFilter>(
+    () => readPortfolioStatusQuery(searchParams.get("carteira")),
+  );
   const [nextPurchase, setNextPurchase] =
     useState<NextPurchaseFilter>(() =>
       readNextPurchaseQuery(searchParams.get("proxima")),
@@ -1116,6 +1164,8 @@ export function CarteiraView() {
             : client.status === status)) &&
         (financialStatus === "todas" ||
           getClientFinancialStatus(client) === financialStatus) &&
+        (portfolioStatus === "todos" ||
+          getClientPortfolioStatus(client) === portfolioStatus) &&
         matchesNextPurchase(client, nextPurchase)
       );
     });
@@ -1125,6 +1175,7 @@ export function CarteiraView() {
     financialStatus,
     level,
     nextPurchase,
+    portfolioStatus,
     search,
     status,
     vendor,
@@ -1204,6 +1255,7 @@ export function CarteiraView() {
     setLevel("todas");
     setStatus("todos");
     setFinancialStatus("todas");
+    setPortfolioStatus("ativo");
     setNextPurchase("todas");
     setQuickFilter("todos");
     setSortKey("diasSemComprar");
@@ -1313,11 +1365,13 @@ export function CarteiraView() {
       <CarteiraSourceNotice state={sourceState} />
 
       <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
-        <Card title="Total de clientes da carteira atual.">
+        <Card title={operationalIndicatorInfo.carteira_ativa.description}>
           <CardContent className="p-3">
-            <div className="text-xs text-muted-foreground">Clientes na base</div>
+            <div className="text-xs text-muted-foreground">
+              {operationalIndicatorInfo.carteira_ativa.carteiraLabel}
+            </div>
             <div className="mt-1 text-xl font-semibold">
-              {summary.totalClientes}
+              {summary.carteiraAtiva}
             </div>
           </CardContent>
         </Card>
@@ -1391,7 +1445,7 @@ export function CarteiraView() {
 
       <Card className="mb-4">
         <CardContent className="space-y-3 p-3">
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[minmax(260px,1fr)_repeat(5,minmax(150px,180px))]">
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[minmax(260px,1fr)_repeat(6,minmax(150px,180px))]">
             <SearchInput
               value={search}
               onChange={(event) => {
@@ -1446,6 +1500,16 @@ export function CarteiraView() {
               description="Situação financeira marcada manualmente pelo escritório."
               onChange={(value) => {
                 setFinancialStatus(value as "todas" | FinancialStatus);
+                setCurrentPage(1);
+              }}
+            />
+            <SelectFilter
+              label="Situação da carteira"
+              value={portfolioStatus}
+              options={portfolioStatusFilterOptions}
+              description="Por padrão, mostra apenas clientes ativos na operação comercial."
+              onChange={(value) => {
+                setPortfolioStatus(value as PortfolioStatusFilter);
                 setCurrentPage(1);
               }}
             />

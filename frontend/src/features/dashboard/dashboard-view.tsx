@@ -43,6 +43,7 @@ import {
   matchesOperationalLevel,
   operationalIndicatorInfo,
 } from "@/features/carteira/operational-rules";
+import { isClientInActivePortfolio } from "@/features/carteira/portfolio-status";
 import { useGamification } from "@/features/gamification/gamification-provider";
 import { MonthlyAchievementsPanel } from "@/features/gamification/monthly-achievements-panel";
 import type {
@@ -1056,6 +1057,10 @@ export function DashboardView({
       ),
     [city, clients, vendor],
   );
+  const activeFilteredClients = useMemo(
+    () => filteredClients.filter(isClientInActivePortfolio),
+    [filteredClients],
+  );
 
   const fallbackGamificationSummary = useMemo(
     () => getSummary(getPeriodPrefix(month, year)),
@@ -1067,22 +1072,22 @@ export function DashboardView({
       : fallbackGamificationSummary;
 
   const dashboard = useMemo(() => {
-    const workedClients = filteredClients.filter((client) =>
+    const workedClients = activeFilteredClients.filter((client) =>
       isWorkedInPeriod(client, month, year),
     );
-    const convertedClients = filteredClients.filter((client) =>
+    const convertedClients = activeFilteredClients.filter((client) =>
       isClientConverted(client, TODAY),
     );
-    const followUpsOverdue = filteredClients.filter(isFollowUpOverdue);
-    const followUpsToday = filteredClients.filter(
+    const followUpsOverdue = activeFilteredClients.filter(isFollowUpOverdue);
+    const followUpsToday = activeFilteredClients.filter(
       (client) =>
         client.proximaCompra === TODAY &&
         ["aguardando", "contatado", "visita"].includes(client.status),
     );
-    const awaitingClients = filteredClients.filter(
+    const awaitingClients = activeFilteredClients.filter(
       (client) => client.status === "aguardando",
     );
-    const visitsClients = filteredClients.filter(
+    const visitsClients = activeFilteredClients.filter(
       (client) => client.status === "visita",
     );
     const operationalCounts = buildOperationalCounts(filteredClients, TODAY);
@@ -1092,6 +1097,10 @@ export function DashboardView({
     );
     const fallbackMetrics: DashboardMetrics = {
       totalClientes: operationalCounts.totalClientes,
+      carteiraAtiva: operationalCounts.carteiraAtiva,
+      clientesArquivados: operationalCounts.clientesArquivados,
+      fecharamSalao: operationalCounts.fecharamSalao,
+      foraOperacao: operationalCounts.foraOperacao,
       saudaveis: operationalCounts.saudaveis,
       atencao: operationalCounts.atencao,
       risco: operationalCounts.risco,
@@ -1118,19 +1127,19 @@ export function DashboardView({
     const sellerRows =
       useSupabaseTotals && initialDashboard.sellerRows.length > 0
         ? initialDashboard.sellerRows
-        : buildSellerRows(filteredClients, month, year);
+        : buildSellerRows(activeFilteredClients, month, year);
     const priorityRows =
       useSupabaseTotals && initialDashboard.priorityRows.length > 0
         ? initialDashboard.priorityRows
-        : buildPriorityRows(filteredClients);
+        : buildPriorityRows(activeFilteredClients);
 
     return {
       kpis: [
         {
-          label: "Total de clientes",
-          value: String(metrics.totalClientes),
-          hint: "Clientes da carteira atual",
-          description: "Total de clientes da última importação publicada, respeitando os filtros aplicados.",
+          label: operationalIndicatorInfo.carteira_ativa.dashboardLabel,
+          value: String(metrics.carteiraAtiva),
+          hint: "Clientes ativos",
+          description: operationalIndicatorInfo.carteira_ativa.description,
           href: buildCarteiraHref(),
           icon: Users,
           tone: "default",
@@ -1288,6 +1297,33 @@ export function DashboardView({
           icon: BarChart3,
           tone: "success",
         },
+        {
+          label: operationalIndicatorInfo.clientes_arquivados.dashboardLabel,
+          value: String(metrics.clientesArquivados),
+          hint: "Fora da rotina",
+          description: operationalIndicatorInfo.clientes_arquivados.description,
+          href: buildCarteiraHref({ carteira: "arquivado" }),
+          icon: Database,
+          tone: "muted",
+        },
+        {
+          label: operationalIndicatorInfo.fecharam_salao.dashboardLabel,
+          value: String(metrics.fecharamSalao),
+          hint: "Motivo cadastrado",
+          description: operationalIndicatorInfo.fecharam_salao.description,
+          href: buildCarteiraHref({ carteira: "fechou_salao" }),
+          icon: AlertTriangle,
+          tone: "muted",
+        },
+        {
+          label: operationalIndicatorInfo.fora_operacao.dashboardLabel,
+          value: String(metrics.foraOperacao),
+          hint: "Não entram nas metas",
+          description: operationalIndicatorInfo.fora_operacao.description,
+          href: buildCarteiraHref({ carteira: "todos" }),
+          icon: ListChecks,
+          tone: "muted",
+        },
       ] satisfies DashboardKpi[],
       alerts: [
         {
@@ -1315,7 +1351,7 @@ export function DashboardView({
         {
           label: "Recompras pendentes",
           count: metrics.recomprasPendentes,
-          total: metrics.totalClientes,
+          total: metrics.carteiraAtiva,
           description: `${metrics.recomprasPendentes} clientes têm próxima compra prevista já passada.`,
           href: buildCarteiraHref({ proxima: "recompra" }),
           tone: "warning",
@@ -1323,18 +1359,19 @@ export function DashboardView({
         {
           label: "Aguardando retorno",
           count: metrics.aguardandoRetorno,
-          total: metrics.totalClientes,
+          total: metrics.carteiraAtiva,
           description: `${metrics.aguardandoRetorno} clientes estão aguardando retorno comercial.`,
           href: getStatusFilter("aguardando"),
           tone: "warning",
         },
       ] satisfies AlertItem[],
-      evolutionRows: buildEvolutionRows(filteredClients, month, year),
-      healthRows: buildHealthRows(filteredClients),
+      evolutionRows: buildEvolutionRows(activeFilteredClients, month, year),
+      healthRows: buildHealthRows(activeFilteredClients),
       sellerRows,
       priorityRows,
     };
   }, [
+    activeFilteredClients,
     filteredClients,
     gamificationSummary.totalPoints,
     initialDashboard.metrics,

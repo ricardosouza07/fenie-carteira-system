@@ -7,6 +7,7 @@ import {
 } from "@/features/importacoes/storage";
 
 import { carteiraClients } from "./mock-clients";
+import { normalizePortfolioStatus } from "./portfolio-status";
 import type { CarteiraClient } from "./types";
 
 const PUBLISHED_CLIENTS_STORAGE_KEY = "fenie.importacoes.clientesPublicados";
@@ -19,12 +20,20 @@ let cachedCarteiraClients: CarteiraClient[] = carteiraClients;
 let cachedSupabaseSnapshotValue: string | null = null;
 let cachedSupabaseSnapshotClients: CarteiraClient[] = [];
 
+function normalizeClientForStore(client: CarteiraClient): CarteiraClient {
+  return {
+    ...client,
+    situacaoCarteira: normalizePortfolioStatus(client.situacaoCarteira),
+    observacaoCarteira: client.observacaoCarteira ?? null,
+  };
+}
+
 function mergeImportedClients(importedClients: CarteiraClient[]) {
   if (importedClients.length === 0) {
     return carteiraClients;
   }
 
-  return importedClients;
+  return importedClients.map(normalizeClientForStore);
 }
 
 export function getCarteiraClientsWithPublishedImports() {
@@ -61,7 +70,9 @@ function readSupabaseSnapshotClients() {
 
   try {
     cachedSupabaseSnapshotClients = storageValue
-      ? (JSON.parse(storageValue) as CarteiraClient[])
+      ? (JSON.parse(storageValue) as CarteiraClient[]).map(
+          normalizeClientForStore,
+        )
       : [];
   } catch {
     cachedSupabaseSnapshotClients = [];
@@ -75,11 +86,12 @@ export function saveSupabaseCarteiraSnapshot(clients: CarteiraClient[]) {
     return;
   }
 
-  const serializedClients = JSON.stringify(clients);
+  const normalizedClients = clients.map(normalizeClientForStore);
+  const serializedClients = JSON.stringify(normalizedClients);
 
   window.localStorage.setItem(SUPABASE_CARTEIRA_SNAPSHOT_KEY, serializedClients);
   cachedSupabaseSnapshotValue = serializedClients;
-  cachedSupabaseSnapshotClients = clients;
+  cachedSupabaseSnapshotClients = normalizedClients;
   window.dispatchEvent(new Event(SUPABASE_CARTEIRA_CHANGED_EVENT));
 }
 

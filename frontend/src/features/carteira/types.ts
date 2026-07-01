@@ -15,6 +15,14 @@ export type FinancialStatus = Extract<
   "adimplente" | "inadimplente" | "bloqueado" | "negociacao"
 >;
 
+export type PortfolioStatus =
+  | "ativo"
+  | "fechou_salao"
+  | "mudou_de_ramo"
+  | "sem_potencial"
+  | "duplicado"
+  | "arquivado";
+
 export type ContactStatus = Extract<
   WorkStatus,
   "contatado" | "aguardando" | "convertido" | "visita"
@@ -75,6 +83,8 @@ export type CarteiraClient = {
   dataTarefa?: string | null;
   situacaoFinanceira: FinancialStatus;
   observacaoFinanceira?: string | null;
+  situacaoCarteira: PortfolioStatus;
+  observacaoCarteira?: string | null;
   status: WorkStatus;
   ultimaAcao: {
     tipo: string;

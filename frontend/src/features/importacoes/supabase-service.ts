@@ -443,6 +443,8 @@ async function upsertCustomer(
         last_action_label: "Importado da planilha",
         financial_status: "adimplente",
         financial_note: null,
+        portfolio_status: "ativo",
+        portfolio_status_note: null,
       })
       .select("id")
       .single(),

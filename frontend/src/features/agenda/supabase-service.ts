@@ -11,6 +11,10 @@ import {
   isClientConverted,
 } from "@/features/carteira/operational-rules";
 import { normalizeFinancialStatus } from "@/features/carteira/financial-status";
+import {
+  isClientInActivePortfolio,
+  normalizePortfolioStatus,
+} from "@/features/carteira/portfolio-status";
 import { addDaysToDateKey, getCurrentPeriod } from "@/lib/current-period";
 
 import type {
@@ -293,6 +297,8 @@ function normalizeClient(input: {
     dataTarefa: dateOnly(customer.task_date),
     situacaoFinanceira: normalizeFinancialStatus(customer.financial_status),
     observacaoFinanceira: stringOrNull(customer.financial_note),
+    situacaoCarteira: normalizePortfolioStatus(customer.portfolio_status),
+    observacaoCarteira: stringOrNull(customer.portfolio_status_note),
     status: workStatus(item?.work_status ?? customer.work_status),
     ultimaAcao: {
       tipo: stringOrNull(customer.last_action_label) ?? "Sem ação registrada",
@@ -517,7 +523,10 @@ export async function loadAgendaFromSupabase(): Promise<LoadAgendaResult> {
         }),
       ];
     });
-    const clientsById = new Map(clients.map((agendaClient) => [agendaClient.id, agendaClient]));
+    const activeClients = clients.filter(isClientInActivePortfolio);
+    const clientsById = new Map(
+      activeClients.map((agendaClient) => [agendaClient.id, agendaClient]),
+    );
     const followUpItems = followUpRows.flatMap((row) => {
       const customerId = stringOrNull(row.customer_id);
       const agendaClient = customerId ? clientsById.get(customerId) : null;
@@ -530,12 +539,12 @@ export async function loadAgendaFromSupabase(): Promise<LoadAgendaResult> {
 
       return item ? [item] : [];
     });
-    const statusItems = clients.flatMap((agendaClient) => {
+    const statusItems = activeClients.flatMap((agendaClient) => {
       const item = normalizeStatusItem(agendaClient);
 
       return item ? [item] : [];
     });
-    const nextPurchaseItems = clients.flatMap((agendaClient) => {
+    const nextPurchaseItems = activeClients.flatMap((agendaClient) => {
       const item = normalizeNextPurchaseItem(agendaClient);
 
       return item ? [item] : [];
@@ -543,7 +552,7 @@ export async function loadAgendaFromSupabase(): Promise<LoadAgendaResult> {
 
     return {
       status: "available",
-      clients,
+      clients: activeClients,
       items: sortAgendaItems([
         ...followUpItems,
         ...statusItems,

@@ -1,4 +1,8 @@
 import { getClientFinancialStatus } from "@/features/carteira/financial-status";
+import {
+  getClientPortfolioStatus,
+  isClientInActivePortfolio,
+} from "@/features/carteira/portfolio-status";
 import type {
   CarteiraClient,
   ClientLevel,
@@ -27,7 +31,11 @@ export type OperationalIndicatorKey =
   | "nao_trabalhados"
   | "inadimplentes"
   | "bloqueados"
-  | "negociacoes_financeiras";
+  | "negociacoes_financeiras"
+  | "carteira_ativa"
+  | "clientes_arquivados"
+  | "fecharam_salao"
+  | "fora_operacao";
 
 export const operationalIndicatorInfo: Record<
   OperationalIndicatorKey,
@@ -82,6 +90,27 @@ export const operationalIndicatorInfo: Record<
     dashboardLabel: "Negociações financeiras",
     description: "Regularização financeira em andamento.",
   },
+  carteira_ativa: {
+    carteiraLabel: "Carteira ativa",
+    dashboardLabel: "Carteira ativa",
+    description: "Clientes ativos na operação comercial.",
+  },
+  clientes_arquivados: {
+    carteiraLabel: "Arquivados",
+    dashboardLabel: "Clientes arquivados",
+    description: "Clientes preservados no histórico, fora da rotina comercial.",
+  },
+  fecharam_salao: {
+    carteiraLabel: "Fecharam salão",
+    dashboardLabel: "Fecharam salão",
+    description: "Clientes marcados como salão fechado.",
+  },
+  fora_operacao: {
+    carteiraLabel: "Fora da operação",
+    dashboardLabel: "Fora da operação",
+    description:
+      "Clientes não ativos por fechamento, mudança de ramo, duplicidade, falta de potencial ou arquivamento.",
+  },
 };
 
 export type OperationalCounts = {
@@ -96,6 +125,10 @@ export type OperationalCounts = {
   clientesInadimplentes: number;
   clientesBloqueados: number;
   negociacoesFinanceiras: number;
+  carteiraAtiva: number;
+  clientesArquivados: number;
+  fecharamSalao: number;
+  foraOperacao: number;
   riscoSemContato: number;
   inativosSemAcao: number;
 };
@@ -176,6 +209,10 @@ export function isClientConverted(
   client: CarteiraClient,
   today = getCurrentPeriod().date,
 ) {
+  if (!isClientInActivePortfolio(client)) {
+    return false;
+  }
+
   return isDateWithinLastDays(
     getLastConversionDate(client),
     CONVERTED_WINDOW_DAYS,
@@ -187,6 +224,10 @@ export function getOperationalClientLevel(
   client: CarteiraClient,
   today = getCurrentPeriod().date,
 ) {
+  if (!isClientInActivePortfolio(client)) {
+    return null;
+  }
+
   if (isClientConverted(client, today)) {
     return null;
   }
@@ -206,7 +247,11 @@ export function isClientInRecompra(
   client: CarteiraClient,
   today = getCurrentPeriod().date,
 ) {
-  return !isClientConverted(client, today) && isDateBeforeToday(client.proximaCompra, today);
+  return (
+    isClientInActivePortfolio(client) &&
+    !isClientConverted(client, today) &&
+    isDateBeforeToday(client.proximaCompra, today)
+  );
 }
 
 export function isClientOldInactive(
@@ -225,7 +270,7 @@ export function hasCommercialInteraction(client: CarteiraClient) {
 }
 
 export function isClientNotWorked(client: CarteiraClient) {
-  return !hasCommercialInteraction(client);
+  return isClientInActivePortfolio(client) && !hasCommercialInteraction(client);
 }
 
 export function isRiskWithoutContact(
@@ -250,38 +295,49 @@ export function buildOperationalCounts(
   clients: CarteiraClient[],
   today = getCurrentPeriod().date,
 ): OperationalCounts {
+  const activeClients = clients.filter(isClientInActivePortfolio);
+
   return {
-    totalClientes: clients.length,
-    saudaveis: clients.filter((client) =>
+    totalClientes: activeClients.length,
+    saudaveis: activeClients.filter((client) =>
       matchesOperationalLevel(client, "saudavel", today),
     ).length,
-    atencao: clients.filter((client) =>
+    atencao: activeClients.filter((client) =>
       matchesOperationalLevel(client, "atencao", today),
     ).length,
-    risco: clients.filter((client) =>
+    risco: activeClients.filter((client) =>
       matchesOperationalLevel(client, "risco", today),
     ).length,
-    inativosAntigos: clients.filter((client) =>
+    inativosAntigos: activeClients.filter((client) =>
       isClientOldInactive(client, today),
     ).length,
-    recomprasPendentes: clients.filter((client) =>
+    recomprasPendentes: activeClients.filter((client) =>
       isClientInRecompra(client, today),
     ).length,
-    convertidos: clients.filter((client) => isClientConverted(client, today))
+    convertidos: activeClients.filter((client) => isClientConverted(client, today))
       .length,
-    naoTrabalhados: clients.filter(isClientNotWorked).length,
-    clientesInadimplentes: clients.filter((client) =>
+    naoTrabalhados: activeClients.filter(isClientNotWorked).length,
+    clientesInadimplentes: activeClients.filter((client) =>
       hasFinancialStatus(client, "inadimplente"),
     ).length,
-    clientesBloqueados: clients.filter((client) =>
+    clientesBloqueados: activeClients.filter((client) =>
       hasFinancialStatus(client, "bloqueado"),
     ).length,
-    negociacoesFinanceiras: clients.filter((client) =>
+    negociacoesFinanceiras: activeClients.filter((client) =>
       hasFinancialStatus(client, "negociacao"),
     ).length,
-    riscoSemContato: clients.filter((client) => isRiskWithoutContact(client, today))
+    carteiraAtiva: activeClients.length,
+    clientesArquivados: clients.filter(
+      (client) => getClientPortfolioStatus(client) === "arquivado",
+    ).length,
+    fecharamSalao: clients.filter(
+      (client) => getClientPortfolioStatus(client) === "fechou_salao",
+    ).length,
+    foraOperacao: clients.filter((client) => !isClientInActivePortfolio(client))
       .length,
-    inativosSemAcao: clients.filter((client) =>
+    riscoSemContato: activeClients.filter((client) => isRiskWithoutContact(client, today))
+      .length,
+    inativosSemAcao: activeClients.filter((client) =>
       isInactiveWithoutAction(client, today),
     ).length,
   };

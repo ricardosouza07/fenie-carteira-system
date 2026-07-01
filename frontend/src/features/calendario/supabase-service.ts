@@ -13,6 +13,10 @@ import {
   isClientConverted,
 } from "@/features/carteira/operational-rules";
 import { normalizeFinancialStatus } from "@/features/carteira/financial-status";
+import {
+  isClientInActivePortfolio,
+  normalizePortfolioStatus,
+} from "@/features/carteira/portfolio-status";
 import { getCurrentPeriod } from "@/lib/current-period";
 import { fetchByIdBatches } from "@/lib/supabase/query-helpers";
 
@@ -284,6 +288,8 @@ function normalizeClient(input: {
     dataTarefa: dateOnly(customer.task_date),
     situacaoFinanceira: normalizeFinancialStatus(customer.financial_status),
     observacaoFinanceira: stringOrNull(customer.financial_note),
+    situacaoCarteira: normalizePortfolioStatus(customer.portfolio_status),
+    observacaoCarteira: stringOrNull(customer.portfolio_status_note),
     status: latestStatus ?? workStatus(item.work_status ?? customer.work_status),
     ultimaAcao: latestInteraction
       ? {
@@ -685,19 +691,20 @@ export async function loadCalendarioFromSupabase(): Promise<LoadCalendarioResult
         }),
       ];
     });
-    const clientsById = new Map(clients.map((calendarClient) => [
+    const activeClients = clients.filter(isClientInActivePortfolio);
+    const clientsById = new Map(activeClients.map((calendarClient) => [
       calendarClient.id,
       calendarClient,
     ]));
 
     return {
       status: "available",
-      clients,
+      clients: activeClients,
       events: sortEvents([
         ...buildFollowUpEvents(followUpRows, clientsById),
-        ...buildNextPurchaseEvents(clients),
+        ...buildNextPurchaseEvents(activeClients),
         ...buildInteractionEvents(interactionRows, clientsById),
-        ...buildWaitingReturnEvents({ clients, followUpsByCustomer }),
+        ...buildWaitingReturnEvents({ clients: activeClients, followUpsByCustomer }),
       ]),
     };
   } catch (error) {
